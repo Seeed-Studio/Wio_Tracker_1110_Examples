@@ -14,6 +14,14 @@
 
 #include <Lbm_packet.hpp>
 
+
+/* most important thing:
+// Please follow local regulations to set lorawan duty cycle limitations
+// smtc_modem_set_region_duty_cycle()
+//
+//
+*/
+
 ////////////////////////////////////////////////////////////////////////////////
 // Types
 
@@ -63,13 +71,17 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
+    if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    {
+        smtc_modem_set_region_duty_cycle( false );
+    }
+
     state = StateType::Joining;
 }
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     state = StateType::Joined;
-
     printf("Start the alarm event.\n");
     if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
 }

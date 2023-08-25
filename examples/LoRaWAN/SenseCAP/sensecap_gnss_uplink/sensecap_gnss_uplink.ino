@@ -15,6 +15,14 @@
 #include <Lbm_packet.hpp>
 
 
+/* most important thing:
+// Please follow local regulations to set lorawan duty cycle limitations
+// smtc_modem_set_region_duty_cycle()
+//
+//
+*/
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Types
 
@@ -97,19 +105,23 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
+    if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    {
+        smtc_modem_set_region_duty_cycle( false );
+    }
+
     state = StateType::Joining;
 }
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     state = StateType::Joined;
+
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
 
     printf("Start time sync.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
-
-    // app_task_packet_power_on_uplink();
     
     printf("Start the alarm event.\n");
     if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
