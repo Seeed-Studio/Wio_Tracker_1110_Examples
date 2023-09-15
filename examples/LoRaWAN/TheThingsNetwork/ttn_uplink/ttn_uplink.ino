@@ -71,10 +71,10 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
-    if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
-    {
-        smtc_modem_set_region_duty_cycle( false );
-    }
+    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    // {
+    //     smtc_modem_set_region_duty_cycle( false );
+    // }
 
     state = StateType::Joining;
 }

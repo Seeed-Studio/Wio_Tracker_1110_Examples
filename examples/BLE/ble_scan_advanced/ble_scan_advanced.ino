@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <Adafruit_TinyUSB.h> // for Serial
+#include <Adafruit_TinyUSB.h> 
 
 #include <bluefruit.h>
 
@@ -11,11 +11,11 @@
 
 void setup() 
 {
-  Serial1.begin(115200);
-  while ( !Serial1 ) delay(10);   // for nrf52840 with native usb
+  Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
-  Serial1.println("Bluefruit52 Central ADV Scan ibeacon");
-  Serial1.println("------------------------------------\n");
+  Serial.println("Bluefruit52 Central ADV Scan ibeacon");
+  Serial.println("------------------------------------\n");
 
   // Initialize Bluefruit with maximum connections as Peripheral = 0, Central = 1
   // SRAM usage required by SoftDevice will increase dramatically with number of connections
@@ -26,7 +26,7 @@ void setup()
   Bluefruit.setName("Bluefruit52");
 
   /* Set the LED interval for blinky pattern on BLUE LED */
-  Bluefruit.setConnLedInterval(250);
+  // Bluefruit.setConnLedInterval(250);
 
   /* Start Central Scanning
    * - Enable auto scan if disconnected
@@ -43,7 +43,7 @@ void setup()
   Bluefruit.Scanner.useActiveScan(true);        // Request scan response data
   Bluefruit.Scanner.start(0);                   // 0 = Don't stop scanning after n seconds
 
-  Serial1.println("Scanning ...");
+  Serial.println("Scanning ...");
 }
 
 void scan_callback(ble_gap_evt_adv_report_t* report)
@@ -70,13 +70,13 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
         {
             if( beacon_data_len == BEACON_DATA_LEN )
             {
-                Serial1.printBufferReverse(report->peer_addr.addr, 6, ':');
-                Serial1.print("\n");              
-                Serial1.printf("%14s %d dBm\n", "RSSI", report->rssi);
-                Serial1.printf( "iBeacon: " );
+                Serial.printBufferReverse(report->peer_addr.addr, 6, ':');
+                Serial.print("\n");              
+                Serial.printf("%14s %d dBm\n", "RSSI", report->rssi);
+                Serial.printf( "iBeacon: " );
                 for( uint8_t i = 0; i < len; i++ )
-                Serial1.printf( "%02x ", buffer[i] );
-                Serial1.printf( "\r\n" );
+                Serial.printf( "%02x ", buffer[i] );
+                Serial.printf( "\r\n" );
 
             }
         }
@@ -86,7 +86,7 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
     memset(buffer, 0, sizeof(buffer));
   }  
 
-  Serial1.println();
+  Serial.println();
 
   // For Softdevice v6: after received a report, scanner will be paused
   // We need to call Scanner resume() to continue scanning

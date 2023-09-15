@@ -132,13 +132,17 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
+    //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
+    app_set_profile_list_by_region(REGION,adr_custom_list_region);
+    if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
+
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
     
-    if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
-    {
-        smtc_modem_set_region_duty_cycle( false );
-    }
+    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    // {
+    //     smtc_modem_set_region_duty_cycle( false );
+    // }
 
     printf("Start time sync.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
@@ -168,13 +172,14 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-
+    uint32_t confirmed_count = 0;
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
-        uplink_count++;
+        app_lora_confirmed_count_increment();
     }
-
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
+    confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
 }
 void MyLbmxEventHandlers::time(const LbmxEvent& event)
 {
@@ -182,14 +187,13 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 
     static bool first = true;
     if (first)
-    {
-        printf("time sync ok\r\n");
+    {  
         if( is_first_time_sync == false )
         {
             is_first_time_sync = true;
         }
-        // Configure ADR and transmissions
-        if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, CUSTOM_ADR) != SMTC_MODEM_RC_OK) abort();
+        printf("time sync ok:current time:%d\r\n",app_task_track_get_utc( ));
+        // Configure transmissions
         if (smtc_modem_set_nb_trans(0, TRANS_NUMBER) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
 
@@ -325,7 +329,7 @@ void loop()
     if(is_first_time_sync == true)
     {
         now_time = smtc_modem_hal_get_time_in_ms( );
-        if(sleepTime > 500)
+        if(sleepTime > 3000)        //Sensor acquisition time requires 2s+
         {
             if(position_period<120000) position_period = 120000;
             if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
@@ -345,7 +349,6 @@ void loop()
                 }
                 printf("stop scan gnss\r\n");
                 app_gps_scan_stop( );
-                sensor_datas_get();
                 //send data to LoRaWAN
                 // raw datas
                 for( uint8_t i = 0; i < gnss_mw_custom_send_buffer_num; i++ )
@@ -360,7 +363,14 @@ void loop()
 
             }
         }
-        sleepTime = smtc_modem_hal_get_time_in_ms( )-now_time;
+        if(sleepTime > (smtc_modem_hal_get_time_in_ms( )-now_time))
+        {
+            sleepTime = sleepTime - (smtc_modem_hal_get_time_in_ms( )-now_time);
+        }
+        else
+        {
+            sleepTime = 1;
+        }
     }
     delay(min(sleepTime, EXECUTION_PERIOD));
 }
