@@ -207,7 +207,31 @@ void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
     confirmed_count = app_lora_get_confirmed_count();
     printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
 }
+void MyLbmxEventHandlers::downData(const LbmxEvent& event)
+{
+    uint8_t port;
+    printf("Downlink received:\n");
+    printf("  - LoRaWAN Fport = %d\n", event.event_data.downdata.fport);
+    printf("  - Payload size  = %d\n", event.event_data.downdata.length);
+    printf("  - RSSI          = %d dBm\n", event.event_data.downdata.rssi - 64);
+    printf("  - SNR           = %d dB\n", event.event_data.downdata.snr / 4);
 
+    if (event.event_data.downdata.length != 0)
+    {
+        port = event.event_data.downdata.fport;
+        gnss_mw_handle_downlink(event.event_data.downdata.fport, event.event_data.downdata.data, event.event_data.downdata.length);
+        if( port == app_lora_port )
+        {
+            app_lora_data_rx_size = event.event_data.downdata.length;
+            memcpy( app_lora_data_rx_buffer, event.event_data.downdata.data, app_lora_data_rx_size );
+            app_task_packet_downlink_decode( app_lora_data_rx_buffer, app_lora_data_rx_size );
+            memset(app_lora_data_rx_buffer,0,app_lora_data_rx_size);
+            app_lora_data_rx_size = 0;
+
+        }
+    }
+
+}
 void MyLbmxEventHandlers::wifiScanDone(const LbmxEvent& event)
 {
     printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_SCAN_DONE).c_str());
