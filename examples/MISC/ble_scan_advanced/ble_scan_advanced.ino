@@ -1,18 +1,14 @@
-#include <Arduino.h>
-#include <Adafruit_TinyUSB.h> 
-
+#include <Adafruit_TinyUSB.h> // for Serial
 #include <bluefruit.h>
-
 
 #define BEACON_DATA_LEN     0x15
 #define BEACON_DATA_TYPE    0x02
 #define COMPANY_IDENTIFIER  0x004C
 
-
 void setup() 
 {
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+  while (!Serial) delay(10);
 
   Serial.println("Bluefruit52 Central ADV Scan ibeacon");
   Serial.println("------------------------------------\n");
@@ -46,13 +42,21 @@ void setup()
   Serial.println("Scanning ...");
 }
 
+void loop() 
+{
+  delay(10000);
+  Bluefruit.Scanner.stop();
+  delay(10000);
+  Bluefruit.Scanner.start(0);
+  // nothing to do
+}
+
 void scan_callback(ble_gap_evt_adv_report_t* report)
 {
   PRINT_LOCATION();
   uint8_t len = 0;
   uint8_t buffer[32];
   memset(buffer, 0, sizeof(buffer));
-
 
   /* Check for Manufacturer Specific Data */
   len = Bluefruit.Scanner.parseReportByType(report, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, buffer, sizeof(buffer));
@@ -63,40 +67,29 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
     uint16_t company_identifier = 0;
     beacon_data_len = buffer[3];
     beacon_data_type = buffer[2];
-    memcpy(( uint8_t * )( &company_identifier ), buffer, 2 );
-    if( beacon_data_type == BEACON_DATA_TYPE )
+    memcpy((uint8_t*)(&company_identifier), buffer, 2);
+    if (beacon_data_type == BEACON_DATA_TYPE)
     {
-        if( company_identifier == COMPANY_IDENTIFIER )
+      if (company_identifier == COMPANY_IDENTIFIER)
+      {
+        if (beacon_data_len == BEACON_DATA_LEN)
         {
-            if( beacon_data_len == BEACON_DATA_LEN )
-            {
-                Serial.printBufferReverse(report->peer_addr.addr, 6, ':');
-                Serial.print("\n");              
-                Serial.printf("%14s %d dBm\n", "RSSI", report->rssi);
-                Serial.printf( "iBeacon: " );
-                for( uint8_t i = 0; i < len; i++ )
-                Serial.printf( "%02x ", buffer[i] );
-                Serial.printf( "\r\n" );
-
-            }
+          Serial.printBufferReverse(report->peer_addr.addr, 6, ':');
+          Serial.print("\n");              
+          Serial.printf("%14s %d dBm\n", "RSSI", report->rssi);
+          Serial.printf("iBeacon: ");
+          for (uint8_t i = 0; i < len; i++) Serial.printf("%02x ", buffer[i]);
+          Serial.printf("\r\n");
         }
+      }
     }
 
-
     memset(buffer, 0, sizeof(buffer));
-  }  
+  }
 
   Serial.println();
 
   // For Softdevice v6: after received a report, scanner will be paused
   // We need to call Scanner resume() to continue scanning
   Bluefruit.Scanner.resume();
-}
-void loop() 
-{
-  delay(10000);
-  Bluefruit.Scanner.stop();
-  delay(10000);
-  Bluefruit.Scanner.start(0);
-  // nothing to do
 }

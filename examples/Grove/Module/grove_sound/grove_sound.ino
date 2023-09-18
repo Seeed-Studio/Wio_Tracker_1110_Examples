@@ -1,39 +1,34 @@
-#include <Arduino.h>
-#include <Adafruit_TinyUSB.h> 
+#include <Adafruit_TinyUSB.h> // for Serial
 
-int adcin    = A0;
-int adcvalue = 0;
-float mv_per_lsb = 3600.0F/1024.0F; // 10-bit ADC with 3.6V input range
+constexpr int ADCIN = A0;
+constexpr float MV_PER_LSB = 3600.0f / 1024.0f; // 10-bit ADC with 3.6V input range
 
 void setup()
 {
-    digitalWrite(PIN_POWER_SUPPLY_GROVE, HIGH);   //grove power on
-    pinMode(PIN_POWER_SUPPLY_GROVE, OUTPUT);  
+  digitalWrite(PIN_POWER_SUPPLY_GROVE, HIGH); // grove power on
+  pinMode(PIN_POWER_SUPPLY_GROVE, OUTPUT);
 
-	delay(100);
+  delay(100);
+  Serial.begin(115200);
+  while (!Serial) delay(100);
 
-	Serial.begin(115200);
-	while (!Serial) {
-		delay(100);
-	}
-    Serial.println("Grove - Sound Sensor Test...");
+  Serial.println("Grove - Sound Sensor Test...");
 }
 
 void loop()
 {
-    long sum = 0;
-    for(int i=0; i<32; i++)
-    {
-        sum += analogRead(adcin);
-        delay(2);
-    }
-    adcvalue = sum >>5;
-
-    Serial.print(adcvalue);
-    Serial.print(" [");
-    Serial.print((float)adcvalue * mv_per_lsb);
-    Serial.println(" mV]");
-
+  long sum = 0;
+  for (int i = 0; i < 32; i++)
+  {
+    sum += analogRead(ADCIN);
     delay(2);
-    // delay(1000);
+  }
+  int adcvalue = sum / 32;
+
+  Serial.print(adcvalue);
+  Serial.print(" [");
+  Serial.print((float)adcvalue * MV_PER_LSB);
+  Serial.println(" mV]");
+
+  delay(2);
 }
