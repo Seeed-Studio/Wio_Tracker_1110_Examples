@@ -1,0 +1,31 @@
+name: Compile Sketch(using staging BSP)
+
+on:
+  - workflow_dispatch
+
+jobs:
+  compile-sketch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install adafruit-nrfutil
+        run: |
+          pip3 install adafruit-nrfutil
+
+      - name: Compile sketch
+        uses: arduino/compile-sketches@v1
+        with:
+          platforms: |
+            - name: Seeeduino:nrf52
+              source-url: https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
+            - source-url: https://github.com/Seeed-Studio/Adafruit_nRF52_Arduino.git
+              name: Seeeduino:nrf52
+              version: Seeed_Wio_Tracker_1110/staging
+          fqbn: Seeeduino:nrf52:wio_tracker_1110
+          sketch-paths: |
+            - ./examples/
+          libraries: |
+            -
