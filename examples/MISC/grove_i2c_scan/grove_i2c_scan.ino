@@ -5,9 +5,6 @@ TwoWire *wi = &Wire;
 
 void setup()
 {
-  digitalWrite(PIN_POWER_SUPPLY_GROVE, HIGH); // grove power on
-  pinMode(PIN_POWER_SUPPLY_GROVE, OUTPUT);
-
   delay(100);
   Serial.begin(115200);
   while (!Serial) delay(100);
