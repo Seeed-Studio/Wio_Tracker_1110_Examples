@@ -166,7 +166,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         {
             is_first_time_sync = true;
         }
-        printf("time sync ok:current time:%d\r\n",app_task_track_get_utc( ));
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, 1) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -176,8 +176,6 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
-
-    static uint32_t counter = 0;
     if(app_task_lora_tx_engine())
     {
         ledOn(LED_BUILTIN);
@@ -198,15 +196,14 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-    uint32_t confirmed_count = 0;
     ledOff(LED_BUILTIN);
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
         app_lora_confirmed_count_increment();
     }
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
-    confirmed_count = app_lora_get_confirmed_count();
-    printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
+    uint32_t confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 
 void MyLbmxEventHandlers::downData(const LbmxEvent& event)
@@ -254,7 +251,7 @@ void MyLbmxEventHandlers::gnssScanDone(const LbmxEvent& event)
         // TODO, save aiding position to nvds
         int32_t lat_temp = app_task_gnss_aiding_position_latitude * 1000000;
         int32_t long_temp = app_task_gnss_aiding_position_longitude * 1000000;
-        printf( "New assistance position stored: %d, %d\r\n", lat_temp, long_temp );
+        printf( "New assistance position stored: %ld, %ld\r\n", lat_temp, long_temp );
 
     }
 

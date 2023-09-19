@@ -153,8 +153,6 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
-
-    static uint32_t counter = 0;
     app_task_lora_tx_engine();
     if (LbmxEngine::startAlarm(UPLINK_PERIOD) != SMTC_MODEM_RC_OK) abort();
 }
@@ -172,14 +170,13 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-    uint32_t confirmed_count = 0;
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
         app_lora_confirmed_count_increment();
     }
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
-    confirmed_count = app_lora_get_confirmed_count();
-    printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
+    uint32_t confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 void MyLbmxEventHandlers::time(const LbmxEvent& event)
 {
@@ -192,7 +189,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         {
             is_first_time_sync = true;
         }
-        printf("time sync ok:current time:%d\r\n",app_task_track_get_utc( ));
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, TRANS_NUMBER) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -234,12 +231,11 @@ void MyLbmxEventHandlers::gnssScanDone(const LbmxEvent& event)
         // TODO, save aiding position to nvds
         int32_t lat_temp = app_task_gnss_aiding_position_latitude * 1000000;
         int32_t long_temp = app_task_gnss_aiding_position_longitude * 1000000;
-        printf( "New assistance position stored: %d, %d\r\n", lat_temp, long_temp );
+        printf( "New assistance position stored: %ld, %ld\r\n", lat_temp, long_temp );
 
     }
     if (eventData.context.almanac_update_required)
     {
-        const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
         if (LbmxDeviceManagement::requestUplink({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
     }
 }
@@ -267,7 +263,6 @@ void MyLbmxEventHandlers::gnssErrorAlmanacUpdate(const LbmxEvent& event)
 {
     printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE).c_str());
 
-    const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
     if (LbmxDeviceManagement::requestUplink({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
     mw_gnss_event_state = GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE;
 }
