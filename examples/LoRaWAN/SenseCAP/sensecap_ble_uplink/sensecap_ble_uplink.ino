@@ -151,7 +151,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         {
             is_first_time_sync = true;
         }
-        printf("time sync ok:current time:%d\r\n",app_task_track_get_utc( ));
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, 1) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -161,8 +161,6 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
-
-    static uint32_t counter = 0;
     app_task_lora_tx_engine();
     if (LbmxEngine::startAlarm(UPLINK_PERIOD) != SMTC_MODEM_RC_OK) abort();
 }
@@ -180,14 +178,13 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-    uint32_t confirmed_count = 0;
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
         app_lora_confirmed_count_increment();
     }
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
-    confirmed_count = app_lora_get_confirmed_count();
-    printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
+    uint32_t confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 void MyLbmxEventHandlers::downData(const LbmxEvent& event)
 {
