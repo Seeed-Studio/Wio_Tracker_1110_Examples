@@ -100,17 +100,17 @@ protected:
     void joinFail(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);     
-    void downData(const LbmxEvent& event);  
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
+    void downData(const LbmxEvent& event) override;
 
     void wifiScanDone(const LbmxEvent& event) override;
     void wifiTerminated(const LbmxEvent& event) override;
     void wifiScanStopped(const LbmxEvent& event) override;
     void wifiScanCancelled(const LbmxEvent& event) override;
     void wifiErrorUnknown(const LbmxEvent& event) override;
-};
 
+};
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {

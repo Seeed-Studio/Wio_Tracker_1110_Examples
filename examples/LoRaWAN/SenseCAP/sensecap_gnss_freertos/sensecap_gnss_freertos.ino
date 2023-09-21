@@ -82,18 +82,17 @@ protected:
     void joinFail(const LbmxEvent& event) override;
 
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);   
-    void downData(const LbmxEvent& event);        
-    
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
+    void downData(const LbmxEvent& event) override;
+
     void gnssScanDone(const LbmxEvent& event) override;
     void gnssScanCancelled(const LbmxEvent& event) override;
     void gnssTerminated(const LbmxEvent& event) override;
     void gnssErrorNoTime(const LbmxEvent& event) override;
     void gnssErrorAlmanacUpdate(const LbmxEvent& event) override;
-    void gnssScanStopped(const LbmxEvent& event) override;  
+    void gnssScanStopped(const LbmxEvent& event) override;
     void gnssErrorNoAidingPosition(const LbmxEvent& event) override;
-
 
 };
 
