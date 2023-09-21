@@ -51,9 +51,9 @@ uint8_t APP_KEY[16];
 ////////////////////////////////////////////////////////////////////////////////
 void init_current_lorawan_param(void)
 {
-    memcpy(DEV_EUI,app_param.lora_info.DevEui,8);
-    memcpy(JOIN_EUI,app_param.lora_info.JoinEui,8);
-    memcpy(APP_KEY,app_param.lora_info.AppKey,16);
+    memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
+    memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
+    memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
 }
 
 // MyLbmxEventHandlers

@@ -28,10 +28,10 @@ void setup()
   // create task
   xTaskCreate(task1, "Task 1", 256 * 4, NULL, 2, NULL);
   xTaskCreate(task2, "Task 2", 256 * 4, NULL, 2, NULL);
-
-  vTaskStartScheduler();
 }
 
 void loop()
 {
+  // On the Arduino platform, it is necessary to keep the loop running.
+  delay(100);
 }

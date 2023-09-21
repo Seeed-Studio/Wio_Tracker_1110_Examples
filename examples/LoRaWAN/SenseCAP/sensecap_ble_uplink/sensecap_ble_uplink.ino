@@ -79,9 +79,9 @@ static StateType state = StateType::Startup;
 ////////////////////////////////////////////////////////////////////////////////
 void init_current_lorawan_param(void)
 {
-    memcpy(DEV_EUI,app_param.lora_info.DevEui,8);
-    memcpy(JOIN_EUI,app_param.lora_info.JoinEui,8);
-    memcpy(APP_KEY,app_param.lora_info.AppKey,16);
+    memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
+    memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
+    memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
 }
 
 // MyLbmxEventHandlers
@@ -93,10 +93,12 @@ protected:
     void joinFail(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);      
-    void downData(const LbmxEvent& event);  
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
+    void downData(const LbmxEvent& event) override;
+
 };
+
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();

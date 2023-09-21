@@ -107,8 +107,8 @@ protected:
     void joined(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);   
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
     void downData(const LbmxEvent& event) override;
     void gnssScanDone(const LbmxEvent& event) override;
     void gnssTerminated(const LbmxEvent& event) override;
