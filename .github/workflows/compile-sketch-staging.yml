@@ -21,9 +21,9 @@ jobs:
           platforms: |
             - name: Seeeduino:nrf52
               source-url: https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json
-            - source-url: https://github.com/Seeed-Studio/Seeed_WM1110_Arduino.git
+            - source-url: https://github.com/Seeed-Studio/Adafruit_nRF52_Arduino.git
               name: Seeeduino:nrf52
-              version: staging
+              version: Seeed_Wio_Tracker_1110/staging
           fqbn: Seeeduino:nrf52:wio_tracker_1110
           sketch-paths: |
             - ./examples/
