@@ -24,6 +24,7 @@ Contains examples for the Arduino IDE platform.
 |[LoRaWAN/SenseCAP/sensecap_gnss_uplink](/examples/LoRaWAN/SenseCAP/sensecap_gnss_uplink)|An Arduino project that collects various sensor data and scan for gnss then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/sensecap_wifi_freertos](/examples/LoRaWAN/SenseCAP/sensecap_wifi_freertos)|An Arduino project that collects various sensor data and scan for wifi then uses freertos to run LoRaWAN upload datas to SenseCAP Cloud|I2C Analog Digital0|LoRaWAN|FreeRTOS|SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/sensecap_wifi_uplink](/examples/LoRaWAN/SenseCAP/sensecap_wifi_uplink)|An Arduino project that collects various sensor data and scan for wifi then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
+|[LoRaWAN/SenseCAP/default_firmware](/examples/LoRaWAN/SenseCAP/default_firmware)|An Arduino project that collects various sensor data and scan for gnss then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
 |[LoRaWAN/TheThingsNetwork/ttn_geolocation_gnss](/examples/LoRaWAN/TheThingsNetwork/ttn_geolocation_gnss)|An Arduino project that scan for gnss then using LoRaWAN upload to TTN Cloud||LoRaWAN||The Things Network|
 |[LoRaWAN/TheThingsNetwork/ttn_uplink](/examples/LoRaWAN/TheThingsNetwork/ttn_uplink)|An Arduino project that using LoRaWAN upload count to TTN Cloud||LoRaWAN||The Things Network|
 |[LoRaWAN/TheThingsNetwork/ttn_uplink_freertos](/examples/LoRaWAN/TheThingsNetwork/ttn_uplink_freertos)|An Arduino project that uses freertos to run LoRaWAN to upload data||LoRaWAN|FreeRTOS|The Things Network|
@@ -31,7 +32,7 @@ Contains examples for the Arduino IDE platform.
 |[MISC/freertos_template](/examples/MISC/freertos_template)|An Arduino project that uses freertos to create tasks|||FreeRTOS||
 |[MISC/grove_i2c_scan](/examples/MISC/grove_i2c_scan)|An Arduino project scan I2C and output the I2C address that responded to the Serial monitor|I2C||||
 |[MISC/p25q32h_flash_speedtest](/examples/MISC/p25q32h_flash_speedtest)|An Arduino project that tests the speed and functionality of a specific SPI Flash memory chip (P25Q32H) using an Adafruit library and output to the Serial monitor||||P25Q32H|
-
+|[MISC/full_almanac_update](/examples/MISC/full_almanac_update)|An Arduino project that update almanac to Lr1110 and output almanac date to the Serial monitor|||||
 `/platformio`
 
 Contains examples for the PlatformIO platform.
