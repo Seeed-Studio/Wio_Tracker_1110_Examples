@@ -32,7 +32,8 @@ Contains examples for the Arduino IDE platform.
 |[MISC/freertos_template](/examples/MISC/freertos_template)|An Arduino project that uses freertos to create tasks|||FreeRTOS||
 |[MISC/grove_i2c_scan](/examples/MISC/grove_i2c_scan)|An Arduino project scan I2C and output the I2C address that responded to the Serial monitor|I2C||||
 |[MISC/p25q32h_flash_speedtest](/examples/MISC/p25q32h_flash_speedtest)|An Arduino project that tests the speed and functionality of a specific SPI Flash memory chip (P25Q32H) using an Adafruit library and output to the Serial monitor||||P25Q32H|
-|[MISC/full_almanac_update](/examples/MISC/full_almanac_update)|An Arduino project that update almanac to Lr1110 and output almanac date to the Serial monitor|||||
+|[MISC/full_almanac_update](/examples/MISC/full_almanac_update)|An Arduino project that update almanac to LR1110 and output almanac date to the Serial monitor|||||
+
 `/platformio`
 
 Contains examples for the PlatformIO platform.
@@ -44,7 +45,6 @@ Contains examples for the PlatformIO platform.
 |[LoRaWAN/TheThingsNetwork/ttn_geolocation_wifi](/platformio/LoRaWAN/TheThingsNetwork/ttn_geolocation_wifi)||The Things Network||
 |[LoRaWAN/TheThingsNetwork/ttn_uplink](/platformio/LoRaWAN/TheThingsNetwork/ttn_uplink)||The Things Network||
 |[LoRaWAN/TheThingsNetwork/ttn_uplink_with_beacon](/platformio/LoRaWAN/TheThingsNetwork/ttn_uplink_with_beacon)||The Things Network||
-
 
 `/src`
 
