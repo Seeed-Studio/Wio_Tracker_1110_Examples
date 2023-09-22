@@ -22,13 +22,14 @@
 //
 //  USER TODO:
 //  1.Redefine parameters   =>      'DEV_EUI','JOIN_EUI','APP_KEY'
-//  2.Comment code call     =>      'init_current_lorawan_param'
-//  3.Modify parameters     =>      'position_period'
+//  2.Modify parameters     =>      'REGION'
+//  3.Comment code call     =>      'init_current_lorawan_param'
+//  4.Modify parameters     =>      'position_period'
 //
 //  If the user has their own sensor
-//  4.Realize Sensor Data Acquisition Put into 'user_data_buff',set 'user_data_len'  (it's must be 4bytes/group)
-//  5.call  function                =>      'user_sensor_datas_set' 
-//  6.call  function                =>      'app_task_user_sensor_data_send'
+//  5.Realize Sensor Data Acquisition Put into 'user_data_buff',set 'user_data_len'  (it's must be 4bytes/group)
+//  6.call  function                =>      'user_sensor_datas_set' 
+//  7.call  function                =>      'app_task_user_sensor_data_send'
 //
 //
 */
@@ -48,29 +49,28 @@ enum class StateType
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
-static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
-
 static constexpr uint32_t TIME_SYNC_VALID_TIME = 60 * 60 * 24;  // [sec.] 
 static constexpr uint32_t FIRST_UPLINK_DELAY = 20;  // [sec.]
 static constexpr uint32_t UPLINK_PERIOD = 10;       // [sec.]
 
 
-static constexpr uint32_t EXECUTION_PERIOD = 60000;    // [msec.]
+static constexpr uint32_t EXECUTION_PERIOD = 60;    // [msec.]
 
-static constexpr uint32_t GNSS_SCAN_PERIOD = 300;    // [sec.] //5 minutes minimum
-bool gnss_scan_end = false;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
+bool gnss_scan_end = false;
 
-uint32_t position_period = GNSS_SCAN_PERIOD*1000;   // [msec.]
-uint32_t gnss_scan_timeout = 60000; // [msec.]
+uint32_t position_period = 300*1000;   // [msec.]
+uint32_t gnss_scan_timeout = 120000; // [msec.]
 
 uint32_t consume_time = 0;
 
 uint8_t DEV_EUI[8];
 uint8_t JOIN_EUI[8];
 uint8_t APP_KEY[16];
+static smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
 
 uint8_t user_data_buff[40];
 uint8_t user_data_len = 0;
@@ -84,11 +84,40 @@ static LbmWm1110& lbmWm1110 = LbmWm1110::getInstance();
 static StateType state = StateType::Startup;
 
 ////////////////////////////////////////////////////////////////////////////////
+void print_current_lorawan_param(void)
+{
+    printf("DevEui:\r\n");
+    for(uint8_t u8i = 0;u8i < 8; u8i++)
+    {
+        printf("%02x ",DEV_EUI[u8i]);
+    }
+    printf("\r\nJoinEui:\r\n");
+    for(uint8_t u8i = 0;u8i < 8; u8i++)
+    {
+        printf("%02x ",JOIN_EUI[u8i]);
+    }
+    printf("\r\nAppKey:\r\n");
+    for(uint8_t u8i = 0;u8i < 16; u8i++)
+    {
+        printf("%02x ",APP_KEY[u8i]);
+    }
+    printf("\r\n");    
+
+    position_period = app_append_param.position_interval*60*1000;
+    sensor_read_period = app_append_param.sample_interval*60*1000;
+
+    printf("position_period:%umin\r\n",app_append_param.position_interval);
+    printf("sensor_read_period:%umin\r\n",app_append_param.sample_interval);
+
+}
 void init_current_lorawan_param(void)
 {
     memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
     memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
     memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
+    REGION = sensecap_lorawan_region();
+
+    print_current_lorawan_param();
 }
 
 // MyLbmxEventHandlers
@@ -116,6 +145,7 @@ protected:
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
+
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
     if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
@@ -128,7 +158,7 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
-    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864)) //disable duty cycle limit
     // {
     //     smtc_modem_set_region_duty_cycle( false );
     // }
@@ -139,7 +169,7 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     state = StateType::Joined;
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
-    app_set_profile_list_by_region(REGION,adr_custom_list_region);
+    app_get_profile_list_by_region(REGION,adr_custom_list_region);
     if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
 
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
@@ -334,7 +364,7 @@ void setup()
     sensor_init_detect();
 
     printf("\n---------- STARTUP ----------\n");
-    custom_lora_adr_compute(0,6,adr_custom_list_region);
+    // custom_lora_adr_compute(0,6,adr_custom_list_region);
 
     lbmWm1110.attachGnssPrescan([](void* context){ digitalWrite(PIN_GNSS_LNA, HIGH); });
     lbmWm1110.attachGnssPostscan([](void* context){ digitalWrite(PIN_GNSS_LNA, LOW); });
@@ -342,16 +372,13 @@ void setup()
     lbmWm1110.begin();
 
     app_gps_scan_init();
-    gnss_group_id_init();
 
-    tracker_scan_type_set(TRACKER_SCAN_GPS);
+    track_scan_type_set(TRACKER_SCAN_GPS);
 
     // /* Initialize GNSS middleware */
     gnss_mw_init( lbmWm1110.getRadio(), stack_id );
     gnss_mw_custom_enable_copy_send_buffer();
     gnss_mw_set_constellations( GNSS_MW_CONSTELLATION_GPS_BEIDOU );
-
-    if(position_period<300000) position_period = 300000;        //Minimum 5 minutes
 
     // /* Set user defined assistance position */
     gnss_mw_set_user_aiding_position( app_task_gnss_aiding_position_latitude, app_task_gnss_aiding_position_longitude );
@@ -364,13 +391,13 @@ void setup()
 void loop()
 {
     static uint32_t now_time = 0;
-	static uint32_t start_scan_time = 0;  
+    static uint32_t start_scan_time = 0;  
     static uint32_t start_sensor_read_time = 0;  
     static uint32_t start_voc_read_time = 0; 
     static uint32_t start_sound_read_time = 0; 
     static uint32_t start_ultrasonic_read_time = 0; 
-    
-    
+
+
     static uint16_t gnss_group_id_backup = track_gnss_group_id;
     bool result = false;  
 
@@ -384,40 +411,51 @@ void loop()
             now_time = smtc_modem_hal_get_time_in_ms( );
             if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
             {
-                if(app_gps_scan_start())
+                if(gps_scan_status != 2)
                 {
-                    printf("start scan gnss\r\n");
-                    gnss_scan_end = false;
-                    start_scan_time = smtc_modem_hal_get_time_in_ms( );
-                    consume_time = start_scan_time - now_time;
-                }
-                else
-                {
-                    consume_time = smtc_modem_hal_get_time_in_ms() - now_time;                    
+                    if(app_gps_scan_start())
+                    {
+                        printf("start scan gnss\r\n");
+                        gnss_scan_end = false;
+                        start_scan_time = smtc_modem_hal_get_time_in_ms( );
+                        consume_time = start_scan_time - now_time;
+                    }
+                    else
+                    {
+                        consume_time = smtc_modem_hal_get_time_in_ms() - now_time;                    
+                    }
                 }
             }
-            
-            if(((smtc_modem_hal_get_time_in_ms( ) - start_scan_time > gnss_scan_timeout)||(gnss_scan_end)) &&(gps_scan_status == 2))    //the consumption time is about 180ms
+            if(gps_scan_status == 2)
             {
                 result = app_gps_get_results( tracker_gps_scan_data, &tracker_gps_scan_len );
                 if( result )
                 {
+                    //the consumption time is about 180ms
                     app_gps_display_results( );
+                    app_gps_scan_stop( );
+                    //Insert  position data to lora tx buffer   
+                    app_task_track_scan_send();
+                    printf("stop scan gnss\r\n");
+                    if(gnss_group_id_backup != track_gnss_group_id)
+                    {
+                        printf("save track_gnss_group_id\r\n");
+                        write_gnss_group_id_param();
+                    }
+                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
                 }
-                printf("stop scan gnss\r\n");
-                app_gps_scan_stop( );
-                //Insert  position data to lora tx buffer
-                app_task_track_scan_send();
-                if(gnss_group_id_backup != track_gnss_group_id)
+                else if(((smtc_modem_hal_get_time_in_ms( ) - start_scan_time > gnss_scan_timeout)||(gnss_scan_end == true)))
                 {
-                    printf("save track_gnss_group_id\r\n");
-                    gnss_group_id_write();
-                }
-                consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
+                    app_gps_scan_stop( );   
+                    //Insert  position data to lora tx buffer
+                    app_task_track_scan_send();
+                    printf("stop scan gnss\r\n");
+                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
+                }                                                
             }      
             sleepTime = sleepTime - consume_time; 
         }
-        if(sleepTime > 1100)
+        if(sleepTime > 600)
         {
             now_time = smtc_modem_hal_get_time_in_ms();
             if(now_time - start_sensor_read_time > sensor_read_period ||(start_sensor_read_time == 0))
