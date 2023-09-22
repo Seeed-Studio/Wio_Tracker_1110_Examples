@@ -103,9 +103,9 @@ void print_current_lorawan_param(void)
 }
 void init_current_lorawan_param(void)
 {
-    memcpy(DEV_EUI,app_param.lora_info.DevEui,8);
-    memcpy(JOIN_EUI,app_param.lora_info.JoinEui,8);
-    memcpy(APP_KEY,app_param.lora_info.AppKey,16);
+    memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
+    memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
+    memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
     REGION = sensecap_lorawan_region();
 
     print_current_lorawan_param();
@@ -161,19 +161,20 @@ protected:
     void joinFail(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);  
-    void downData(const LbmxEvent& event);   
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
+    void downData(const LbmxEvent& event) override;
 
     void gnssScanDone(const LbmxEvent& event) override;
     void gnssScanCancelled(const LbmxEvent& event) override;
     void gnssTerminated(const LbmxEvent& event) override;
     void gnssErrorNoTime(const LbmxEvent& event) override;
     void gnssErrorAlmanacUpdate(const LbmxEvent& event) override;
-    void gnssScanStopped(const LbmxEvent& event) override;  
+    void gnssScanStopped(const LbmxEvent& event) override;
     void gnssErrorNoAidingPosition(const LbmxEvent& event) override;
 
 };
+
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
 
