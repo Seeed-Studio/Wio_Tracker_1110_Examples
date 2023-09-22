@@ -110,9 +110,9 @@ void print_current_lorawan_param(void)
 }
 void init_current_lorawan_param(void)
 {
-    memcpy(DEV_EUI,app_param.lora_info.DevEui,8);
-    memcpy(JOIN_EUI,app_param.lora_info.JoinEui,8);
-    memcpy(APP_KEY,app_param.lora_info.AppKey,16);
+    memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
+    memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
+    memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
     REGION = sensecap_lorawan_region();
 
     print_current_lorawan_param();
@@ -127,17 +127,17 @@ protected:
     void joinFail(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);     
-    void downData(const LbmxEvent& event);  
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
+    void downData(const LbmxEvent& event) override;
 
     void wifiScanDone(const LbmxEvent& event) override;
     void wifiTerminated(const LbmxEvent& event) override;
     void wifiScanStopped(const LbmxEvent& event) override;
     void wifiScanCancelled(const LbmxEvent& event) override;
     void wifiErrorUnknown(const LbmxEvent& event) override;
-};
 
+};
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
@@ -196,7 +196,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         {
             is_first_time_sync = true;
         }
-        printf("time sync ok:current time:%d\r\n",app_task_track_get_utc( ));
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, 1) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -206,8 +206,6 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
-
-    static uint32_t counter = 0;
     if(app_task_lora_tx_engine())
     {
         ledOn(LED_BUILTIN);
@@ -228,15 +226,14 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-    uint32_t confirmed_count = 0;
     ledOff(LED_BUILTIN);
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
         app_lora_confirmed_count_increment();
     }
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
-    confirmed_count = app_lora_get_confirmed_count();
-    printf( "LoRa tx done at %u, %u, %u\r\n", tick, ++uplink_count, confirmed_count );    
+    uint32_t confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 
 void MyLbmxEventHandlers::downData(const LbmxEvent& event)
