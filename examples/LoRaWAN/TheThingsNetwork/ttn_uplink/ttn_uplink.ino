@@ -12,9 +12,6 @@
 #include <LbmWm1110.hpp>
 #include <Lbmx.hpp>
 
-#include <Lbm_packet.hpp>
-
-
 /* most important thing:
 // Please follow local regulations to set lorawan duty cycle limitations
 // smtc_modem_set_region_duty_cycle()
@@ -37,6 +34,9 @@ enum class StateType
 // Constants
 
 static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_AS_923_GRP1;
+static const uint8_t DEV_EUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t JOIN_EUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t APP_KEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 static constexpr uint32_t FIRST_UPLINK_DELAY = 60;  // [sec.]
 static constexpr uint32_t UPLINK_PERIOD = 30;       // [sec.]
@@ -66,7 +66,7 @@ protected:
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
-    if (LbmxEngine::setOTAA(app_param.lora_info.DevEui, app_param.lora_info.JoinEui, app_param.lora_info.AppKey) != SMTC_MODEM_RC_OK) abort();
+    if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
@@ -124,8 +124,6 @@ void setup()
 {
     delay(1000);
     printf("\n---------- STARTUP ----------\n");
-
-    default_param_load();
 
     lbmWm1110.begin();
     LbmxEngine::begin(lbmWm1110.getRadio(), ModemEventHandler);

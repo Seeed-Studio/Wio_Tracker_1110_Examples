@@ -14,8 +14,6 @@
 
 #include <Lbm_packet.hpp>
 
-
-
 /* most important thing:
 // Please follow local regulations to set lorawan duty cycle limitations
 // smtc_modem_set_region_duty_cycle()
@@ -23,11 +21,14 @@
 //
 */
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
 static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_AS_923_GRP1;
+static const uint8_t DEV_EUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t JOIN_EUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t APP_KEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
 static const uint8_t CUSTOM_ADR[SMTC_MODEM_CUSTOM_ADR_DATA_LENGTH] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3 };
 static constexpr uint8_t TRANS_NUMBER = 1;
 
@@ -121,7 +122,7 @@ protected:
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
-    if (LbmxEngine::setOTAA(app_param.lora_info.DevEui, app_param.lora_info.JoinEui, app_param.lora_info.AppKey) != SMTC_MODEM_RC_OK) abort();
+    if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
     if (LbmxDeviceManagement::setInfoInterval(SMTC_MODEM_DM_INFO_INTERVAL_IN_DAY, 1) != SMTC_MODEM_RC_OK) abort();
     if (LbmxDeviceManagement::setInfoFields({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
@@ -133,7 +134,7 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
-    app_get_profile_list_by_region(REGION,adr_custom_list_region);
+    app_get_profile_list_by_region(REGION, adr_custom_list_region);
     if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
 
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order

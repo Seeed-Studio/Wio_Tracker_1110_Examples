@@ -5,7 +5,6 @@
 
 #include <Lbm_packet.hpp>
 
-
 //taskhandle
 static TaskHandle_t  LORAWAN_ENGINE_Handle;
 static TaskHandle_t  LORAWAN_TX_Handle;
@@ -35,6 +34,9 @@ enum class StateType
 // Constants
 
 static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
+static const uint8_t DEV_EUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t JOIN_EUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t APP_KEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 static constexpr uint8_t UPLINK_FPORT = 5;
 
@@ -44,18 +46,7 @@ static constexpr uint8_t UPLINK_FPORT = 5;
 static LbmWm1110& lbmWm1110 = LbmWm1110::getInstance();
 static StateType state = StateType::Startup;
 
-uint8_t DEV_EUI[8];
-uint8_t JOIN_EUI[8];
-uint8_t APP_KEY[16];
-
 ////////////////////////////////////////////////////////////////////////////////
-void init_current_lorawan_param(void)
-{
-    memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
-    memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
-    memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
-}
-
 // MyLbmxEventHandlers
 
 class MyLbmxEventHandlers : public LbmxEventHandlers
@@ -88,7 +79,7 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     state = StateType::Joined;
 
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
-    app_get_profile_list_by_region(REGION,adr_custom_list_region);
+    app_get_profile_list_by_region(REGION, adr_custom_list_region);
     if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR    
 
     printf("Start the alarm event.\n");
