@@ -88,7 +88,7 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     state = StateType::Joined;
 
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
-    app_set_profile_list_by_region(REGION,adr_custom_list_region);
+    app_get_profile_list_by_region(REGION,adr_custom_list_region);
     if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR    
 
     printf("Start the alarm event.\n");
