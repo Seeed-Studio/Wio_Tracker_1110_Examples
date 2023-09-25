@@ -135,8 +135,11 @@ void user_button_irq_callback(void)
             if(( key_release_cnt - key_press_cnt ) > 10 ) //press
             {
                 button_press_flag = 1;
-                button_trig_position = 1;
-                button_trig_collect = 1;
+                if((button_trig_position == 0) && (button_trig_collect == 0))
+                {
+                    button_trig_position = 1;
+                    button_trig_collect = 1;
+                }
                 key_press_cnt = 0;
                 state_all = state_all|TRACKER_STATE_BIT0_SOS;
                 
