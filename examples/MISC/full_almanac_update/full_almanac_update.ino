@@ -160,12 +160,12 @@ void setup()
 
     uint32_t almanac_date_in_lr1110 = app_task_radio_get_almanac_date();
     uint32_t almanac_date_in_buffer = get_almanac_date_from_buffer();
-    printf("almanac_date lr1110:%u,buffer:%u\r\n",almanac_date_in_lr1110,almanac_date_in_buffer);
+    printf("almanac_date lr1110:%lu,buffer:%lu\r\n",almanac_date_in_lr1110,almanac_date_in_buffer);
 
     app_task_full_almanac_update();  
 
     uint32_t almanac_date = app_task_radio_get_almanac_date();
-    printf("almanac_date:%u\r\n",almanac_date);
+    printf("almanac_date:%lu\r\n",almanac_date);
 }
 
 void loop()
