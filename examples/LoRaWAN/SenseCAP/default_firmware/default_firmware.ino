@@ -70,6 +70,8 @@ uint8_t button_press_flag = 0;
 uint8_t button_trig_position = 0;
 uint8_t button_trig_collect = 0;
 
+static uint32_t led_flicker_start_time = 0;
+uint16_t led_flicker_timeout = 2000;
 
 static LbmWm1110& lbmWm1110 = LbmWm1110::getInstance();
 static StateType state = StateType::Startup;
@@ -110,7 +112,41 @@ void init_current_lorawan_param(void)
 
     print_current_lorawan_param();
 }
-
+void modem_run_led_action(void)
+{
+    switch (state)
+    {
+        case StateType::Startup:
+            ledOff(LED_BUILTIN);
+            break;
+        case StateType::Joining:
+            if (millis() % 2000 < 100) ledOn(LED_BUILTIN); else ledOff(LED_BUILTIN);
+            break;
+        case StateType::Joined:
+            if(led_flicker_start_time > 0)
+            {
+                digitalToggle(LED_BUILTIN);
+                if((led_flicker_start_time+led_flicker_timeout)<smtc_modem_hal_get_time_in_ms( ))
+                {
+                    led_flicker_start_time = 0;
+                }
+            }
+            break;
+        case StateType::Failed:
+            break;
+    }    
+}
+void event_triggered_state_set(void)
+{
+    if((button_trig_position == 1)||(button_trig_collect == 1))
+    {
+        state_all = state_all|TRACKER_STATE_BIT0_SOS;
+    }
+    if((move_trig_position == 1)||(move_trig_collect == 1))
+    {
+        state_all = state_all|TRACKER_STATE_BIT5_DEV_SHOCK;
+    }
+}
 //irq callback----------------------------------------------------
 void user_button_irq_callback(void)
 {
@@ -215,7 +251,7 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     
     printf("Start the alarm event.\n");
     if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
-
+    led_flicker_start_time = smtc_modem_hal_get_time_in_ms( );
 }
 void MyLbmxEventHandlers::joinFail(const LbmxEvent& event)
 {
@@ -438,6 +474,8 @@ void loop()
 
     uint32_t sleepTime = LbmxEngine::doWork();
 
+    modem_run_led_action();   
+
     if(is_first_time_sync == true)
     {
         if(sleepTime > 300)
@@ -468,7 +506,8 @@ void loop()
                     //the consumption time is about 180ms
                     app_gps_display_results( );
                     app_gps_scan_stop( );
-                    //Insert  position data to lora tx buffer   
+                    //Insert  position data to lora tx buffer 
+                    event_triggered_state_set();
                     app_task_track_scan_send();
                     button_trig_position = 0;
                     move_trig_position = 0;
@@ -484,6 +523,7 @@ void loop()
                 {
                     app_gps_scan_stop( );   
                     //Insert  position data to lora tx buffer
+                    event_triggered_state_set();
                     app_task_track_scan_send();
                     button_trig_position = 0;
                     move_trig_position = 0;
@@ -504,6 +544,7 @@ void loop()
                 single_fact_sensor_display_results(sht4x_sensor_type);                
                 factory_sensor_data_combined();
                 //Insert all sensor data to lora tx buffer
+                event_triggered_state_set();
                 app_task_factory_sensor_data_send();
                 button_trig_collect = 0;
                 move_trig_collect = 0;
