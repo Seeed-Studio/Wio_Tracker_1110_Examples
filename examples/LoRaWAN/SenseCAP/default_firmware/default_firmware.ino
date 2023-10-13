@@ -1,5 +1,5 @@
 /*
- * sensecap_wifi_uplink.ino
+ * default_firmware.ino
  * Copyright (C) 2023 Seeed K.K.
  * MIT License
  */
@@ -19,20 +19,16 @@
 // Please follow local regulations to set lorawan duty cycle limitations => smtc_modem_set_region_duty_cycle()
 // 
 //  Make sure the 'sleepTime' is greater than the time required to run the code.Otherwise, LoRaWAN will run incorrectly
-//  
+//
 //  USER TODO:
 //  1.Redefine parameters   =>      'DEV_EUI','JOIN_EUI','APP_KEY'
 //  2.Modify parameters     =>      'REGION'
 //  3.Comment code call     =>      'init_current_lorawan_param'
 //  4.Modify parameters     =>      'position_period'
-//
-//  If the user has their own sensor
-//  5.Realize Sensor Data Acquisition Put into 'user_data_buff',set 'user_data_len'  (it's must be 4bytes/group)
-//  6.call  function                =>      'user_sensor_datas_set' 
-//  7.call  function                =>      'app_task_user_sensor_data_send'
-//
+//  5.Modify parameters     =>      'sensor_read_period'
 //
 */
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Types
@@ -48,7 +44,6 @@ enum class StateType
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
-
 static constexpr uint32_t TIME_SYNC_VALID_TIME = 60 * 60 * 24;  // [sec.] 
 static constexpr uint32_t FIRST_UPLINK_DELAY = 20;  // [sec.]
 static constexpr uint32_t UPLINK_PERIOD = 10;       // [sec.]
@@ -58,25 +53,23 @@ static constexpr uint32_t EXECUTION_PERIOD = 60;    // [msec.]
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
+bool gnss_scan_end = false;
 
 uint32_t position_period = 300*1000;   // [msec.]
-uint32_t wifi_scan_timeout = 1000; // [msec.]
-bool wifi_scan_end = false;
-uint32_t consume_time = 0;
+uint32_t gnss_scan_timeout = 120000; // [msec.]
 
+uint32_t consume_time = 0;
 
 uint8_t DEV_EUI[8];
 uint8_t JOIN_EUI[8];
 uint8_t APP_KEY[16];
 static smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
 
-uint8_t user_data_buff[40];
-uint8_t user_data_len = 0;
+uint32_t sensor_read_period = 300*1000;   // [msec.]
+uint8_t button_press_flag = 0;
+uint8_t button_trig_position = 0;
+uint8_t button_trig_collect = 0;
 
-uint32_t sensor_read_period = 180*1000;   // [msec.]
-uint32_t sound_sample_period = 10*1000;   // [msec.]
-uint32_t ultrasonic_sample_period = 10*1000;   // [msec.]
-uint16_t voc_sample_period = 10000;      // [msec.]
 
 static LbmWm1110& lbmWm1110 = LbmWm1110::getInstance();
 static StateType state = StateType::Startup;
@@ -118,6 +111,50 @@ void init_current_lorawan_param(void)
     print_current_lorawan_param();
 }
 
+//irq callback----------------------------------------------------
+void user_button_irq_callback(void)
+{
+    static uint32_t key_press_cnt = 0;
+    static uint32_t key_release_cnt = 0;    
+    static uint8_t btn_state = 0; 
+
+    if( btn_state == 0 )
+    {
+        if( 0 == digitalRead( PIN_BUTTON1 ))
+        {
+            btn_state = 1;
+            key_press_cnt = smtc_modem_hal_get_time_in_ms( );
+        }
+    }
+    else if( btn_state == 1 )
+    {
+        if( 1 == digitalRead( PIN_BUTTON1 ))
+        {
+            btn_state = 0;
+            key_release_cnt = smtc_modem_hal_get_time_in_ms( );
+            if(( key_release_cnt - key_press_cnt ) > 10 ) //press
+            {
+                button_press_flag = 1;
+                if((button_trig_position == 0) && (button_trig_collect == 0))
+                {
+                    button_trig_position = 1;
+                    button_trig_collect = 1;
+                }
+                key_press_cnt = 0;
+                state_all = state_all|TRACKER_STATE_BIT0_SOS;
+                
+            }
+        }
+    }
+}
+
+void user_button_init(void)
+{
+    pinMode(PIN_BUTTON1, INPUT);
+    attachInterrupt(PIN_BUTTON1, user_button_irq_callback, ISR_DEFERRED | CHANGE); 
+}
+
+
 // MyLbmxEventHandlers
 class MyLbmxEventHandlers : public LbmxEventHandlers
 {
@@ -131,16 +168,19 @@ protected:
     void txDone(const LbmxEvent& event) override;
     void downData(const LbmxEvent& event) override;
 
-    void wifiScanDone(const LbmxEvent& event) override;
-    void wifiTerminated(const LbmxEvent& event) override;
-    void wifiScanStopped(const LbmxEvent& event) override;
-    void wifiScanCancelled(const LbmxEvent& event) override;
-    void wifiErrorUnknown(const LbmxEvent& event) override;
+    void gnssScanDone(const LbmxEvent& event) override;
+    void gnssScanCancelled(const LbmxEvent& event) override;
+    void gnssTerminated(const LbmxEvent& event) override;
+    void gnssErrorNoTime(const LbmxEvent& event) override;
+    void gnssErrorAlmanacUpdate(const LbmxEvent& event) override;
+    void gnssScanStopped(const LbmxEvent& event) override;
+    void gnssErrorNoAidingPosition(const LbmxEvent& event) override;
 
 };
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
+
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
     if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
@@ -157,7 +197,6 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     // {
     //     smtc_modem_set_region_duty_cycle( false );
     // }
-
     state = StateType::Joining;
 }
 
@@ -167,10 +206,9 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
     app_get_profile_list_by_region(REGION,adr_custom_list_region);
     if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
-    
+
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
-
 
     printf("Start time sync.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
@@ -179,7 +217,6 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
 
 }
-
 void MyLbmxEventHandlers::joinFail(const LbmxEvent& event)
 {
     state = StateType::Failed;
@@ -190,8 +227,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 
     static bool first = true;
     if (first)
-    {
-        
+    {   
         if( is_first_time_sync == false )
         {
             is_first_time_sync = true;
@@ -261,36 +297,78 @@ void MyLbmxEventHandlers::downData(const LbmxEvent& event)
     }
 
 }
-void MyLbmxEventHandlers::wifiScanDone(const LbmxEvent& event)
+ 
+void MyLbmxEventHandlers::gnssScanDone(const LbmxEvent& event)
 {
-    printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_SCAN_DONE).c_str());
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_SCAN_DONE).c_str());
 
-    wifi_mw_get_event_data_scan_done(&wifi_results);
-    wifi_mw_display_results(&wifi_results);
+    gnss_mw_event_data_scan_done_t eventData;
+    gnss_mw_get_event_data_scan_done(&eventData);
+
+    float latitude_dif, longitude_dif;
+    latitude_dif = fabs( eventData.context.aiding_position_latitude - app_task_gnss_aiding_position_latitude );
+    longitude_dif = fabs( eventData.context.aiding_position_longitude - app_task_gnss_aiding_position_longitude );
+
+    /* Store the new assistance position only if the difference is greater than the conversion error */
+    if(( latitude_dif > ( float ) 0.03 ) || ( longitude_dif > ( float ) 0.03 ))
+    {
+        app_task_gnss_aiding_position_latitude  = eventData.context.aiding_position_latitude;
+        app_task_gnss_aiding_position_longitude = eventData.context.aiding_position_longitude;
+        // TODO, save aiding position to nvds
+        int32_t lat_temp = app_task_gnss_aiding_position_latitude * 1000000;
+        int32_t long_temp = app_task_gnss_aiding_position_longitude * 1000000;
+        printf( "New assistance position stored: %ld, %ld\r\n", lat_temp, long_temp );
+
+    }
+
+    if (eventData.context.almanac_update_required)
+    {
+        const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+        if (smtc_modem_dm_request_single_uplink(&dmAlmanacStatus, 1) != SMTC_MODEM_RC_OK) abort();
+    }
 }
 
-void MyLbmxEventHandlers::wifiTerminated(const LbmxEvent& event)
+void MyLbmxEventHandlers::gnssTerminated(const LbmxEvent& event)
 {
-    printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_TERMINATED).c_str());
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_TERMINATED).c_str());
 
-    wifi_mw_event_data_terminated_t eventData;
-    wifi_mw_get_event_data_terminated(&eventData);
+    gnss_mw_event_data_terminated_t eventData;
+    gnss_mw_get_event_data_terminated(&eventData);
     printf("TERMINATED info:\n");
     printf("-- number of scans sent: %u\n", eventData.nb_scans_sent);
+    printf("-- aiding position check sent: %d\n", eventData.aiding_position_check_sent);
+}
+void MyLbmxEventHandlers::gnssScanCancelled(const LbmxEvent& event)
+{
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_TERMINATED).c_str());
 }
 
-void MyLbmxEventHandlers::wifiScanCancelled(const LbmxEvent& event)
+void MyLbmxEventHandlers::gnssErrorNoTime(const LbmxEvent& event)
 {
-    printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_TERMINATED).c_str());
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_ERROR_NO_TIME).c_str());
+
+    if (smtc_modem_time_trigger_sync_request(0) != SMTC_MODEM_RC_OK) abort();
+    mw_gnss_event_state = GNSS_MW_EVENT_ERROR_NO_TIME;
+
 }
-void MyLbmxEventHandlers::wifiErrorUnknown(const LbmxEvent& event)
+
+void MyLbmxEventHandlers::gnssErrorAlmanacUpdate(const LbmxEvent& event)
 {
-    printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_TERMINATED).c_str());
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE).c_str());
+
+    const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
+    if (smtc_modem_dm_request_single_uplink(&dmAlmanacStatus, 1) != SMTC_MODEM_RC_OK) abort();
+    mw_gnss_event_state = GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE;
 }
-void MyLbmxEventHandlers::wifiScanStopped(const LbmxEvent& event)
+void MyLbmxEventHandlers::gnssErrorNoAidingPosition(const LbmxEvent& event)
 {
-    wifi_scan_end = true;
-    wifi_mw_custom_clear_scan_busy();
+    printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE).c_str());
+
+}
+void MyLbmxEventHandlers::gnssScanStopped(const LbmxEvent& event)
+{
+    gnss_scan_end = true;
+    gnss_mw_custom_clear_scan_busy();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -319,18 +397,31 @@ void setup()
     delay(1000);
     sensor_init_detect();
 
+    app_ble_adv_init();
+
     printf("\n---------- STARTUP ----------\n");
+
+
     // custom_lora_adr_compute(0,6,adr_custom_list_region);
+
+    lbmWm1110.attachGnssPrescan([](void* context){ digitalWrite(PIN_GNSS_LNA, HIGH); });
+    lbmWm1110.attachGnssPostscan([](void* context){ digitalWrite(PIN_GNSS_LNA, LOW); });
 
     lbmWm1110.begin();
 
-    app_wifi_scan_init();
-    track_scan_type_set(TRACKER_SCAN_WIFI);
-    
-    //Initialize wifi middleware
-    wifi_mw_init(lbmWm1110.getRadio(), 0);
-    wifi_mw_send_bypass(true);
+    app_gps_scan_init();
+    user_button_init();
 
+    track_scan_type_set(TRACKER_SCAN_GPS);
+
+    // /* Initialize GNSS middleware */
+    gnss_mw_init( lbmWm1110.getRadio(), stack_id );
+    gnss_mw_custom_enable_copy_send_buffer();
+    gnss_mw_set_constellations( GNSS_MW_CONSTELLATION_GPS_BEIDOU );
+
+    // /* Set user defined assistance position */
+    gnss_mw_set_user_aiding_position( app_task_gnss_aiding_position_latitude, app_task_gnss_aiding_position_longitude );
+    
     LbmxEngine::begin(lbmWm1110.getRadio(), ModemEventHandler);
     LbmxEngine::printVersions(lbmWm1110.getRadio());
 
@@ -340,113 +431,98 @@ void loop()
 {
     static uint32_t now_time = 0;
     static uint32_t start_scan_time = 0;  
-    static uint32_t start_sensor_read_time = 0;  
-    static uint32_t start_voc_read_time = 0; 
-    static uint32_t start_sound_read_time = 0; 
-    static uint32_t start_ultrasonic_read_time = 0; 
+    static uint32_t start_sensor_read_time = 0;   
 
-
+    static uint16_t gnss_group_id_backup = track_gnss_group_id;
     bool result = false;  
 
     uint32_t sleepTime = LbmxEngine::doWork();
-    now_time = smtc_modem_hal_get_time_in_ms( );
 
-    if(sleepTime > 300)
-    {
-        //temperture & humidity & voc
-        if(now_time - start_voc_read_time > voc_sample_period ||(start_voc_read_time == 0))
-        {
-            //the consumption time is about 260ms
-            single_fact_sensor_data_get(sht4x_sensor_type);     //get temperture&humidity for SGP internal compensation
-            single_fact_sensor_display_results(sht4x_sensor_type);
-            single_fact_sensor_data_get(sgp41_sensor_type);
-            single_fact_sensor_display_results(sgp41_sensor_type);
-            start_voc_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_voc_read_time - now_time;
-            sleepTime = sleepTime - consume_time;
-        }
-    }
-        
     if(is_first_time_sync == true)
     {
         if(sleepTime > 300)
-        {
+        {  
             now_time = smtc_modem_hal_get_time_in_ms( );
-            if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
+            if(now_time - start_scan_time > position_period ||(start_scan_time == 0)||(button_trig_position == 1)||(move_trig_position == 1))
             {
-                printf("start scan wifi\r\n");
-                app_wifi_scan_start();
-                wifi_scan_end = false;
-                start_scan_time = smtc_modem_hal_get_time_in_ms( );
-                consume_time = start_scan_time - now_time;
+                if(gps_scan_status != 2)
+                {
+                    if(app_gps_scan_start())
+                    {
+                        printf("start scan gnss\r\n");
+                        gnss_scan_end = false;
+                        start_scan_time = smtc_modem_hal_get_time_in_ms( );
+                        consume_time = start_scan_time - now_time;
+                    }
+                    else
+                    {
+                        consume_time = smtc_modem_hal_get_time_in_ms() - now_time;                    
+                    }
+                }
             }
-            if(((smtc_modem_hal_get_time_in_ms( ) - start_scan_time > wifi_scan_timeout)||(wifi_scan_end)) &&(wifi_scan_status == 2))
+            if(gps_scan_status == 2)
             {
-                result = app_wifi_get_results( tracker_wifi_scan_data, &tracker_wifi_scan_len );
+                result = app_gps_get_results( tracker_gps_scan_data, &tracker_gps_scan_len );
                 if( result )
                 {
-                    app_wifi_display_results( );
+                    //the consumption time is about 180ms
+                    app_gps_display_results( );
+                    app_gps_scan_stop( );
+                    //Insert  position data to lora tx buffer   
+                    app_task_track_scan_send();
+                    button_trig_position = 0;
+                    move_trig_position = 0;
+                    printf("stop scan gnss\r\n");
+                    if(gnss_group_id_backup != track_gnss_group_id)
+                    {
+                        printf("save track_gnss_group_id\r\n");
+                        write_gnss_group_id_param();
+                    }
+                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
                 }
-                printf("stop scan wifi\r\n");
-                app_wifi_scan_stop( );
-                //Insert  position data to lora tx buffer
-                app_task_track_scan_send();
-                consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time;
+                else if(((smtc_modem_hal_get_time_in_ms( ) - start_scan_time > gnss_scan_timeout)||(gnss_scan_end == true)))
+                {
+                    app_gps_scan_stop( );   
+                    //Insert  position data to lora tx buffer
+                    app_task_track_scan_send();
+                    button_trig_position = 0;
+                    move_trig_position = 0;
+                    printf("stop scan gnss\r\n");
+                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
+                }                                                
             }
             sleepTime = sleepTime - consume_time; 
         }
-        if(sleepTime > 1100)
-        {
+        if(sleepTime > 50)
+        { 
             now_time = smtc_modem_hal_get_time_in_ms();
-            if(now_time - start_sensor_read_time > sensor_read_period ||(start_sensor_read_time == 0))
+            if(now_time - start_sensor_read_time > sensor_read_period ||(start_sensor_read_time == 0)||(button_trig_collect ==1)||(move_trig_collect == 1))
             {
-                single_fact_sensor_data_get(lis3dhtr_sensor_type);                      //consume  1ms     if reinitialize => 602ms
-                single_fact_sensor_data_get(dps310_sensor_type);                        //consume  219ms   if reinitialize => 335ms 
-                single_fact_sensor_data_get(si1151_sensor_type);                        //consume  4ms     if reinitialize => 98ms
+                single_fact_sensor_data_get(lis3dhtr_sensor_type);                      //consume  1ms    
+                single_fact_sensor_display_results(lis3dhtr_sensor_type);                 
+                single_fact_sensor_data_get(sht4x_sensor_type);     //get temperture&humidity
+                single_fact_sensor_display_results(sht4x_sensor_type);                
                 factory_sensor_data_combined();
-                app_sensor_data_display_results();
                 //Insert all sensor data to lora tx buffer
                 app_task_factory_sensor_data_send();
+                button_trig_collect = 0;
+                move_trig_collect = 0;
                 start_sensor_read_time = smtc_modem_hal_get_time_in_ms( );
                 consume_time = start_sensor_read_time - now_time; 
                 sleepTime = sleepTime - consume_time;
             }
         }
+    }  
+    if(hal_ble_rec_data())
+    {
+        parse_cmd((char *)ble_rec_data_buf, ble_rec_data_len);         
+        memset(ble_rec_data_buf,0,ble_rec_data_len);
+        ble_rec_data_len = 0;
+        ble_rec_done = false;        
     }
-    if(sleepTime > 50)
+    if(ble_connect_status == 3)
     {
-        now_time = smtc_modem_hal_get_time_in_ms();
-        if(now_time - start_sound_read_time > sound_sample_period ||(start_sound_read_time == 0))
-        {
-            single_fact_sensor_data_get(sound_sensor_type);                 //30ms
-            single_fact_sensor_display_results(sound_sensor_type);
-            start_sound_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_sound_read_time - now_time;             
-            sleepTime = sleepTime - consume_time;
-        }                          
-    }        
-    if(sleepTime > 50)
-    {
-        now_time = smtc_modem_hal_get_time_in_ms();
-        if(now_time - start_ultrasonic_read_time > ultrasonic_sample_period ||(start_ultrasonic_read_time == 0))
-        {
-            single_fact_sensor_data_get(ultrasonic_sensor_type);                 //if connected it will be 3ms,else 40ms timeout 
-            single_fact_sensor_display_results(ultrasonic_sensor_type);
-            if(ultrasonic_distance_cm < 10)
-            {
-                if(!relay_status_on())
-                {
-                    relay_status_control(true); 
-                }
-            }
-            else if(relay_status_on())
-            {
-                relay_status_control(false);     
-            }
-            start_ultrasonic_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_ultrasonic_read_time - now_time;             
-            sleepTime = sleepTime - consume_time;
-        }                          
+        smtc_modem_hal_reset_mcu();
     }
     delay(min(sleepTime, EXECUTION_PERIOD));
 }

@@ -1,12 +1,3 @@
-/*
- * sensecap_gnss_uplink.ino
- * Copyright (C) 2023 Seeed K.K.
- * MIT License
- */
-
-////////////////////////////////////////////////////////////////////////////////
-// Includes
-
 #include <Arduino.h>
 
 #include <LbmWm1110.hpp>
@@ -15,25 +6,31 @@
 #include <Lbm_packet.hpp>
 
 
-/* most important things:
-// Please follow local regulations to set lorawan duty cycle limitations => smtc_modem_set_region_duty_cycle()
-// 
-//  Make sure the 'sleepTime' is greater than the time required to run the code.Otherwise, LoRaWAN will run incorrectly
-//
-//  USER TODO:
-//  1.Redefine parameters   =>      'DEV_EUI','JOIN_EUI','APP_KEY'
-//  2.Modify parameters     =>      'REGION'
-//  3.Comment code call     =>      'init_current_lorawan_param'
-//  4.Modify parameters     =>      'position_period'
-//
-//  If the user has their own sensor
-//  5.Realize Sensor Data Acquisition Put into 'user_data_buff',set 'user_data_len'  (it's must be 4bytes/group)
-//  6.call  function                =>      'user_sensor_datas_set' 
-//  7.call  function                =>      'app_task_user_sensor_data_send'
+//taskhandle
+static TaskHandle_t  LORAWAN_ENGINE_Handle;
+static TaskHandle_t  LORAWAN_TX_Handle;
+static TaskHandle_t  LORAWAN_RX_Handle;
+static TaskHandle_t  GNSS_SCAN_Handle;
+static TaskHandle_t  GROUP_ID_SAVE_Handle;
+
+static TaskHandle_t  COLLECT_VOC_Handle;
+static TaskHandle_t  COLLECT_SENSOR_Handle;
+static TaskHandle_t  COLLECT_SOUND_Handle;
+static TaskHandle_t  COLLECT_ULTRASONIC_Handle;
+
+
+void app_group_id_save_task_wakeup( void );
+void app_gnss_scan_task_wakeup( void );
+void app_lora_engine_task_wakeup( void );
+void app_lora_tx_task_wakeup( void );
+void app_lora_rx_task_wakeup( void );
+
+/* most important thing:
+// Please follow local regulations to set lorawan duty cycle limitations
+// smtc_modem_set_region_duty_cycle()
 //
 //
 */
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Types
@@ -49,40 +46,25 @@ enum class StateType
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
+
+
 static constexpr uint32_t TIME_SYNC_VALID_TIME = 60 * 60 * 24;  // [sec.] 
-static constexpr uint32_t FIRST_UPLINK_DELAY = 20;  // [sec.]
-static constexpr uint32_t UPLINK_PERIOD = 10;       // [sec.]
-
-
-static constexpr uint32_t EXECUTION_PERIOD = 60;    // [msec.]
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
-bool gnss_scan_end = false;
-
 uint32_t position_period = 300*1000;   // [msec.]
-uint32_t gnss_scan_timeout = 120000; // [msec.]
-
-uint32_t consume_time = 0;
-
-uint8_t DEV_EUI[8];
-uint8_t JOIN_EUI[8];
-uint8_t APP_KEY[16];
-static smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
-
-uint8_t user_data_buff[40];
-uint8_t user_data_len = 0;
-
 uint32_t sensor_read_period = 180*1000;   // [msec.]
-uint32_t sound_sample_period = 10*1000;   // [msec.]
-uint32_t ultrasonic_sample_period = 10*1000;   // [msec.]
-uint16_t voc_sample_period = 10000;      // [msec.]
 
 static LbmWm1110& lbmWm1110 = LbmWm1110::getInstance();
 static StateType state = StateType::Startup;
 
+uint8_t DEV_EUI[8];
+uint8_t JOIN_EUI[8];
+uint8_t APP_KEY[16];
+
+static smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
+
+uint32_t gnss_scan_timeout = 60000; // [msec.]
 ////////////////////////////////////////////////////////////////////////////////
 void print_current_lorawan_param(void)
 {
@@ -110,24 +92,27 @@ void print_current_lorawan_param(void)
     printf("sensor_read_period:%umin\r\n",app_append_param.sample_interval);
 
 }
+
 void init_current_lorawan_param(void)
 {
     memcpy(DEV_EUI, app_param.lora_info.DevEui, sizeof(DEV_EUI));
     memcpy(JOIN_EUI, app_param.lora_info.JoinEui, sizeof(JOIN_EUI));
     memcpy(APP_KEY, app_param.lora_info.AppKey, sizeof(APP_KEY));
+    
     REGION = sensecap_lorawan_region();
 
     print_current_lorawan_param();
 }
 
 // MyLbmxEventHandlers
+
 class MyLbmxEventHandlers : public LbmxEventHandlers
 {
 protected:
     void reset(const LbmxEvent& event) override;
     void joined(const LbmxEvent& event) override;
     void joinFail(const LbmxEvent& event) override;
-    void alarm(const LbmxEvent& event) override;
+
     void time(const LbmxEvent& event) override;
     void almanacUpdate(const LbmxEvent& event) override;
     void txDone(const LbmxEvent& event) override;
@@ -145,7 +130,6 @@ protected:
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
-
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
     if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
@@ -158,30 +142,31 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
     printf("Join the LoRaWAN network.\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
-    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864)) //disable duty cycle limit
+    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
     // {
     //     smtc_modem_set_region_duty_cycle( false );
     // }
+
     state = StateType::Joining;
 }
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     state = StateType::Joined;
+
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
     app_get_profile_list_by_region(REGION,adr_custom_list_region);
-    if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
+    if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR    
 
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
 
     printf("Start time sync.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
-    
-    printf("Start the alarm event.\n");
-    if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
 
+    app_lora_tx_task_wakeup( );
 }
+
 void MyLbmxEventHandlers::joinFail(const LbmxEvent& event)
 {
     state = StateType::Failed;
@@ -192,12 +177,13 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 
     static bool first = true;
     if (first)
-    {   
+    {
         if( is_first_time_sync == false )
         {
             is_first_time_sync = true;
+            app_gnss_scan_task_wakeup();
         }
-        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));       
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, 1) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -205,14 +191,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         first = false;
     }
 }
-void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
-{
-    if(app_task_lora_tx_engine())
-    {
-        ledOn(LED_BUILTIN);
-    }
-    if (LbmxEngine::startAlarm(UPLINK_PERIOD) != SMTC_MODEM_RC_OK) abort();
-}
+
 void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 {
     if( event.event_data.almanac_update.status == SMTC_MODEM_EVENT_ALMANAC_UPDATE_STATUS_REQUESTED )
@@ -236,7 +215,6 @@ void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
     uint32_t confirmed_count = app_lora_get_confirmed_count();
     printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
-
 void MyLbmxEventHandlers::downData(const LbmxEvent& event)
 {
     uint8_t port;
@@ -254,15 +232,10 @@ void MyLbmxEventHandlers::downData(const LbmxEvent& event)
         {
             app_lora_data_rx_size = event.event_data.downdata.length;
             memcpy( app_lora_data_rx_buffer, event.event_data.downdata.data, app_lora_data_rx_size );
-            app_task_packet_downlink_decode( app_lora_data_rx_buffer, app_lora_data_rx_size );
-            memset(app_lora_data_rx_buffer,0,app_lora_data_rx_size);
-            app_lora_data_rx_size = 0;
-
+            app_lora_rx_task_wakeup();
         }
     }
-
 }
- 
 void MyLbmxEventHandlers::gnssScanDone(const LbmxEvent& event)
 {
     printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_SCAN_DONE).c_str());
@@ -302,6 +275,7 @@ void MyLbmxEventHandlers::gnssTerminated(const LbmxEvent& event)
     printf("TERMINATED info:\n");
     printf("-- number of scans sent: %u\n", eventData.nb_scans_sent);
     printf("-- aiding position check sent: %d\n", eventData.aiding_position_check_sent);
+    // app_gnss_scan_task_wakeup();
 }
 void MyLbmxEventHandlers::gnssScanCancelled(const LbmxEvent& event)
 {
@@ -332,8 +306,8 @@ void MyLbmxEventHandlers::gnssErrorNoAidingPosition(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::gnssScanStopped(const LbmxEvent& event)
 {
-    gnss_scan_end = true;
     gnss_mw_custom_clear_scan_busy();
+    app_gnss_scan_task_wakeup();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -352,11 +326,224 @@ static void ModemEventHandler()
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// setup and loop
 
-void setup()
+//---------------Task---------------- ---------------
+void app_gnss_scan_task_wakeup( void )
 {
+    xTaskNotifyGive( GNSS_SCAN_Handle );
+}
+void app_group_id_save_task_wakeup( void )
+{
+    xTaskNotifyGive( GROUP_ID_SAVE_Handle );
+}
+
+void app_lora_tx_task_wakeup( void )
+{
+    xTaskNotifyGive( LORAWAN_TX_Handle );
+}
+void app_lora_rx_task_wakeup( void )
+{
+    xTaskNotifyGive( LORAWAN_RX_Handle );
+}
+void app_Lora_engine_task_wakeup( void )
+{
+    xTaskNotifyGive( LORAWAN_ENGINE_Handle );
+}
+
+// LoraWan_Engine_Task
+void LoraWan_Engine_Task(void *parameter) {
+    while (true) 
+    {
+        uint32_t sleepTime = LbmxEngine::doWork();
+        ( void )ulTaskNotifyTake( pdTRUE, sleepTime );
+    }
+}
+
+// Gnss_scan_Task
+void Gnss_Scan_Task(void *parameter) {
+    static uint32_t gnss_start_time = 0;
+    uint32_t gnss_end_time = 0;  
+    uint32_t gnss_next_scan_delay = 0; 
+    bool result = false;      
+    uint32_t now_time = 0; 
+    static bool scan_round_flag = false;
+    while (true) 
+    {
+        if(is_first_time_sync == false)
+        {
+            ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+            xTaskNotifyGive( COLLECT_SENSOR_Handle );
+        }
+        while(1)
+        {
+            if(gps_scan_status != 2)
+            {
+                now_time = smtc_modem_hal_get_time_in_ms( );
+                if(now_time - gnss_start_time > position_period ||(gnss_start_time == 0))
+                {
+                    if(app_gps_scan_start())
+                    {
+                        scan_round_flag = false;
+                        gnss_start_time = smtc_modem_hal_get_time_in_ms( );
+                        app_Lora_engine_task_wakeup();
+                        printf("start scan gnss\r\n");
+                    }   
+                }
+            }        
+            gnss_end_time = smtc_modem_hal_get_time_in_ms( );
+            result = app_gps_get_results( tracker_gps_scan_data, &tracker_gps_scan_len );
+            if( result )
+            {
+                app_gps_display_results( );
+                app_gps_scan_stop( );
+                scan_round_flag = true;
+                //Insert  position data to lora tx buffer
+                app_task_track_scan_send();
+                app_group_id_save_task_wakeup();
+                printf("stop scan gnss\r\n"); 
+            }
+            else if(gnss_end_time - gnss_start_time > gnss_scan_timeout)
+            {
+                app_gps_scan_stop( );
+                 scan_round_flag = true;
+                //Insert  position data to lora tx buffer
+                app_task_track_scan_send();              
+            } 
+            if(scan_round_flag)      
+            {
+                gnss_next_scan_delay = position_period - (gnss_end_time - gnss_start_time);      
+                vTaskDelay(gnss_next_scan_delay);
+            } 
+            else
+            {
+                ulTaskNotifyTake(pdTRUE,1000);
+            }   
+        }
+    }
+}
+
+// LoraWan_Tx_Task
+void LoraWan_Tx_Task(void *parameter) {
+    while (true) 
+    {
+        ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        while(1)
+        {
+            if(app_task_lora_tx_engine() == true)
+            {
+                ledOn(LED_BUILTIN);
+                app_Lora_engine_task_wakeup(  );
+                
+            }
+            vTaskDelay( 10000 );
+        }
+    }
+}
+// LoraWan_Rx_Task
+void LoraWan_Rx_Task( void * pvParameter )
+{   
+    while( true )
+    {
+        ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        app_task_packet_downlink_decode( app_lora_data_rx_buffer, app_lora_data_rx_size );
+        memset(app_lora_data_rx_buffer,0,app_lora_data_rx_size);
+        app_lora_data_rx_size = 0;
+    }
+}
+
+// Group_Id_Save_Task
+void Group_Id_Save_Task(void *parameter) {
+    static uint16_t group_id_backup =0xFFFF;
+    while (true) 
+    {
+        group_id_backup = track_gnss_group_id;
+        ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );        
+        while(1)
+        {
+            if(group_id_backup != track_gnss_group_id)
+            {
+                group_id_backup = track_gnss_group_id;
+                write_gnss_group_id_param();
+            }
+            ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY ); 
+        }
+    }
+}
+
+// Collect_Voc_Task
+void Collect_Voc_Task(void *parameter) {
+    while (true) 
+    {
+        //get temperture&humidity for SGP internal compensation
+        single_fact_sensor_data_get(sht4x_sensor_type);     //get temperture&humidity for SGP internal compensation
+        single_fact_sensor_display_results(sht4x_sensor_type);
+        single_fact_sensor_data_get(sgp41_sensor_type);
+        single_fact_sensor_display_results(sgp41_sensor_type);
+        vTaskDelay( 10000 );
+    }
+}
+
+// Collect_Sensor_Task
+void Collect_Sensor_Task(void *parameter) {
+    uint32_t sensor_start_time = 0;
+    uint32_t sensor_end_time = 0;
+    uint32_t sensor_collect_delay = 0;
+    while (true) 
+    {
+        if(is_first_time_sync == false)
+        {
+            ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        }
+        while(1)
+        {
+            sensor_start_time = smtc_modem_hal_get_time_in_ms( );
+            single_fact_sensor_data_get(lis3dhtr_sensor_type);                      // 1ms
+            single_fact_sensor_data_get(dps310_sensor_type);                        //219ms
+            single_fact_sensor_data_get(si1151_sensor_type);                        //4ms
+            factory_sensor_data_combined();
+            app_sensor_data_display_results();
+            //Insert all sensor data to lora tx buffer
+            app_task_factory_sensor_data_send();              //30ms
+            sensor_end_time = smtc_modem_hal_get_time_in_ms( );
+            sensor_collect_delay = sensor_read_period - (sensor_end_time - sensor_start_time);
+            vTaskDelay( sensor_collect_delay );
+        }
+    }
+}
+
+// Collect_Sound_Task
+void Collect_Sound_Task(void *parameter) {
+    while (true) 
+    {
+        single_fact_sensor_data_get(sound_sensor_type);                 //30ms
+        vTaskDelay( 10000 );
+    }
+}
+
+// Collect_Ultrasonic_Task
+void Collect_Ultrasonic_Task(void *parameter) {
+    while (true) 
+    {
+        //get temperture&humidity for SGP internal compensation
+        single_fact_sensor_data_get(ultrasonic_sensor_type);                 //5ms
+        single_fact_sensor_display_results(ultrasonic_sensor_type);
+        if(ultrasonic_distance_cm < 10)
+        {
+            if(!relay_status_on())
+            {
+                relay_status_control(true); 
+            }
+        }
+        else if(relay_status_on())
+        {
+            relay_status_control(false);     
+        }
+        vTaskDelay( 10000 );
+    }
+}
+
+ 
+void setup() {
 
     default_param_load();
     init_current_lorawan_param();
@@ -364,17 +551,15 @@ void setup()
     sensor_init_detect();
 
     printf("\n---------- STARTUP ----------\n");
-    // custom_lora_adr_compute(0,6,adr_custom_list_region);
 
     lbmWm1110.attachGnssPrescan([](void* context){ digitalWrite(PIN_GNSS_LNA, HIGH); });
     lbmWm1110.attachGnssPostscan([](void* context){ digitalWrite(PIN_GNSS_LNA, LOW); });
+    
+    track_scan_type_set(TRACKER_SCAN_GPS);
 
     lbmWm1110.begin();
 
     app_gps_scan_init();
-
-    track_scan_type_set(TRACKER_SCAN_GPS);
-
     // /* Initialize GNSS middleware */
     gnss_mw_init( lbmWm1110.getRadio(), stack_id );
     gnss_mw_custom_enable_copy_send_buffer();
@@ -382,149 +567,32 @@ void setup()
 
     // /* Set user defined assistance position */
     gnss_mw_set_user_aiding_position( app_task_gnss_aiding_position_latitude, app_task_gnss_aiding_position_longitude );
-    
+
     LbmxEngine::begin(lbmWm1110.getRadio(), ModemEventHandler);
+
     LbmxEngine::printVersions(lbmWm1110.getRadio());
 
+    // create task
+    xTaskCreate(LoraWan_Engine_Task, "LoraWan_Engine_Task", 256*4, NULL, 1, &LORAWAN_ENGINE_Handle);
+
+    xTaskCreate(Gnss_Scan_Task, "Gnss_Scan_Task", 256*4, NULL, 3, &GNSS_SCAN_Handle);
+
+    xTaskCreate(LoraWan_Tx_Task, "LoraWan_Tx_Task", 256*2, NULL, 2, &LORAWAN_TX_Handle);
+    
+    xTaskCreate(LoraWan_Rx_Task, "LoraWan_Rx_Task", 256*2, NULL, 1, &LORAWAN_RX_Handle);
+    
+    xTaskCreate(Group_Id_Save_Task, "Group_Id_Save_Task", 256, NULL, 4, &GROUP_ID_SAVE_Handle);    
+
+    xTaskCreate(Collect_Voc_Task, "Collect_Voc_Task", 256*2, NULL, 1, &COLLECT_VOC_Handle); 
+
+    xTaskCreate(Collect_Sensor_Task, "Collect_Sensor_Task", 256*8, NULL, 1, &COLLECT_SENSOR_Handle); 
+
+    xTaskCreate(Collect_Sound_Task, "Collect_Sound_Task", 256*2, NULL, 1, &COLLECT_SOUND_Handle); 
+
+    xTaskCreate(Collect_Ultrasonic_Task, "Collect_Ultrasonic_Task", 256*2, NULL, 1, &COLLECT_ULTRASONIC_Handle); 
+
 }
-
-void loop()
-{
-    static uint32_t now_time = 0;
-    static uint32_t start_scan_time = 0;  
-    static uint32_t start_sensor_read_time = 0;  
-    static uint32_t start_voc_read_time = 0; 
-    static uint32_t start_sound_read_time = 0; 
-    static uint32_t start_ultrasonic_read_time = 0; 
-
-
-    static uint16_t gnss_group_id_backup = track_gnss_group_id;
-    bool result = false;  
-
-
-    uint32_t sleepTime = LbmxEngine::doWork();
-        
-    if(is_first_time_sync == true)
-    {
-        if(sleepTime > 300)
-        {
-            now_time = smtc_modem_hal_get_time_in_ms( );
-            if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
-            {
-                if(gps_scan_status != 2)
-                {
-                    if(app_gps_scan_start())
-                    {
-                        printf("start scan gnss\r\n");
-                        gnss_scan_end = false;
-                        start_scan_time = smtc_modem_hal_get_time_in_ms( );
-                        consume_time = start_scan_time - now_time;
-                    }
-                    else
-                    {
-                        consume_time = smtc_modem_hal_get_time_in_ms() - now_time;                    
-                    }
-                }
-            }
-            if(gps_scan_status == 2)
-            {
-                result = app_gps_get_results( tracker_gps_scan_data, &tracker_gps_scan_len );
-                if( result )
-                {
-                    //the consumption time is about 180ms
-                    app_gps_display_results( );
-                    app_gps_scan_stop( );
-                    //Insert  position data to lora tx buffer   
-                    app_task_track_scan_send();
-                    printf("stop scan gnss\r\n");
-                    if(gnss_group_id_backup != track_gnss_group_id)
-                    {
-                        printf("save track_gnss_group_id\r\n");
-                        write_gnss_group_id_param();
-                    }
-                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
-                }
-                else if(((smtc_modem_hal_get_time_in_ms( ) - start_scan_time > gnss_scan_timeout)||(gnss_scan_end == true)))
-                {
-                    app_gps_scan_stop( );   
-                    //Insert  position data to lora tx buffer
-                    app_task_track_scan_send();
-                    printf("stop scan gnss\r\n");
-                    consume_time = smtc_modem_hal_get_time_in_ms( ) - now_time; 
-                }                                                
-            }      
-            sleepTime = sleepTime - consume_time; 
-        }
-        if(sleepTime > 600)
-        {
-            now_time = smtc_modem_hal_get_time_in_ms();
-            if(now_time - start_sensor_read_time > sensor_read_period ||(start_sensor_read_time == 0))
-            {
-                single_fact_sensor_data_get(lis3dhtr_sensor_type);                      //consume  1ms     if reinitialize => 602ms
-                single_fact_sensor_data_get(dps310_sensor_type);                        //consume  219ms   if reinitialize => 335ms
-                single_fact_sensor_data_get(si1151_sensor_type);                        //consume  4ms     if reinitialize => 98ms
-                factory_sensor_data_combined();
-                app_sensor_data_display_results();
-                //Insert all sensor data to lora tx buffer
-                app_task_factory_sensor_data_send();
-                start_sensor_read_time = smtc_modem_hal_get_time_in_ms( );
-                consume_time = start_sensor_read_time - now_time; 
-                sleepTime = sleepTime - consume_time;
-            }
-        }
-    }
-    if(sleepTime > 50)
-    {
-        now_time = smtc_modem_hal_get_time_in_ms();
-        if(now_time - start_sound_read_time > sound_sample_period ||(start_sound_read_time == 0))
-        {
-            single_fact_sensor_data_get(sound_sensor_type);                 //30ms
-            single_fact_sensor_display_results(sound_sensor_type);
-            start_sound_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_sound_read_time - now_time;             
-            sleepTime = sleepTime - consume_time;
-        }                          
-    }        
-    if(sleepTime > 50)
-    {
-        now_time = smtc_modem_hal_get_time_in_ms();
-        if(now_time - start_ultrasonic_read_time > ultrasonic_sample_period ||(start_ultrasonic_read_time == 0))
-        {
-            single_fact_sensor_data_get(ultrasonic_sensor_type);                 //if connected it will be 3ms,else 40ms timeout 
-            single_fact_sensor_display_results(ultrasonic_sensor_type);
-            if(ultrasonic_distance_cm < 10)
-            {
-                if(!relay_status_on())
-                {
-                    relay_status_control(true); 
-                }
-            }
-            else if(relay_status_on())
-            {
-                relay_status_control(false);     
-            }
-            start_ultrasonic_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_ultrasonic_read_time - now_time;             
-            sleepTime = sleepTime - consume_time;
-        }                          
-    }
-    if(sleepTime > 300)
-    {
-        now_time = smtc_modem_hal_get_time_in_ms( );
-        //temperture & humidity & voc
-        if(now_time - start_voc_read_time > voc_sample_period ||(start_voc_read_time == 0))
-        {
-            //the consumption time is about 260ms
-            single_fact_sensor_data_get(sht4x_sensor_type);     //get temperture&humidity for SGP internal compensation
-            single_fact_sensor_display_results(sht4x_sensor_type);
-            single_fact_sensor_data_get(sgp41_sensor_type);
-            single_fact_sensor_display_results(sgp41_sensor_type);
-            start_voc_read_time = smtc_modem_hal_get_time_in_ms( );
-            consume_time = start_voc_read_time - now_time;
-            sleepTime = sleepTime - consume_time;
-        }
-    }
-    delay(min(sleepTime, EXECUTION_PERIOD));
+ 
+void loop() {
+	
 }
-
-////////////////////////////////////////////////////////////////////////////////

@@ -14,8 +14,6 @@
 
 #include <Lbm_packet.hpp>
 
-
-
 /* most important thing:
 // Please follow local regulations to set lorawan duty cycle limitations
 // smtc_modem_set_region_duty_cycle()
@@ -23,11 +21,14 @@
 //
 */
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
 static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_AS_923_GRP1;
+static const uint8_t DEV_EUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t JOIN_EUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t APP_KEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
 static const uint8_t CUSTOM_ADR[SMTC_MODEM_CUSTOM_ADR_DATA_LENGTH] = { 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 3, 3 };
 static constexpr uint8_t TRANS_NUMBER = 1;
 
@@ -107,8 +108,8 @@ protected:
     void joined(const LbmxEvent& event) override;
     void alarm(const LbmxEvent& event) override;
     void time(const LbmxEvent& event) override;
-    void almanacUpdate(const LbmxEvent& event) override;  
-    void txDone(const LbmxEvent& event);   
+    void almanacUpdate(const LbmxEvent& event) override;
+    void txDone(const LbmxEvent& event) override;
     void downData(const LbmxEvent& event) override;
     void gnssScanDone(const LbmxEvent& event) override;
     void gnssTerminated(const LbmxEvent& event) override;
@@ -121,7 +122,7 @@ protected:
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
-    if (LbmxEngine::setOTAA(app_param.lora_info.DevEui, app_param.lora_info.JoinEui, app_param.lora_info.AppKey) != SMTC_MODEM_RC_OK) abort();
+    if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
     if (LbmxDeviceManagement::setInfoInterval(SMTC_MODEM_DM_INFO_INTERVAL_IN_DAY, 1) != SMTC_MODEM_RC_OK) abort();
     if (LbmxDeviceManagement::setInfoFields({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
@@ -132,13 +133,17 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
+    //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
+    app_get_profile_list_by_region(REGION, adr_custom_list_region);
+    if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR  
+
     if (smtc_modem_time_set_sync_interval_s(TIME_SYNC_VALID_TIME / 3) != SMTC_MODEM_RC_OK) abort();     // keep call order
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
     
-    if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
-    {
-        smtc_modem_set_region_duty_cycle( false );
-    }
+    // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864))
+    // {
+    //     smtc_modem_set_region_duty_cycle( false );
+    // }
 
     printf("Start time sync.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
@@ -149,8 +154,6 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
-
-    static uint32_t counter = 0;
     app_task_lora_tx_engine();
     if (LbmxEngine::startAlarm(UPLINK_PERIOD) != SMTC_MODEM_RC_OK) abort();
 }
@@ -168,13 +171,13 @@ void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
-
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
-        uplink_count++;
+        app_lora_confirmed_count_increment();
     }
-
     uint32_t tick = smtc_modem_hal_get_time_in_ms( );
+    uint32_t confirmed_count = app_lora_get_confirmed_count();
+    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 void MyLbmxEventHandlers::time(const LbmxEvent& event)
 {
@@ -182,14 +185,13 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 
     static bool first = true;
     if (first)
-    {
-        printf("time sync ok\r\n");
+    {  
         if( is_first_time_sync == false )
         {
             is_first_time_sync = true;
         }
-        // Configure ADR and transmissions
-        if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, CUSTOM_ADR) != SMTC_MODEM_RC_OK) abort();
+        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
+        // Configure transmissions
         if (smtc_modem_set_nb_trans(0, TRANS_NUMBER) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
 
@@ -230,12 +232,11 @@ void MyLbmxEventHandlers::gnssScanDone(const LbmxEvent& event)
         // TODO, save aiding position to nvds
         int32_t lat_temp = app_task_gnss_aiding_position_latitude * 1000000;
         int32_t long_temp = app_task_gnss_aiding_position_longitude * 1000000;
-        printf( "New assistance position stored: %d, %d\r\n", lat_temp, long_temp );
+        printf( "New assistance position stored: %ld, %ld\r\n", lat_temp, long_temp );
 
     }
     if (eventData.context.almanac_update_required)
     {
-        const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
         if (LbmxDeviceManagement::requestUplink({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
     }
 }
@@ -263,7 +264,6 @@ void MyLbmxEventHandlers::gnssErrorAlmanacUpdate(const LbmxEvent& event)
 {
     printf("----- GNSS - %s -----\n", event.getGnssEventString(GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE).c_str());
 
-    const uint8_t dmAlmanacStatus = SMTC_MODEM_DM_FIELD_ALMANAC_STATUS;
     if (LbmxDeviceManagement::requestUplink({ SMTC_MODEM_DM_FIELD_ALMANAC_STATUS }) != SMTC_MODEM_RC_OK) abort();
     mw_gnss_event_state = GNSS_MW_EVENT_ERROR_ALMANAC_UPDATE;
 }
@@ -325,7 +325,7 @@ void loop()
     if(is_first_time_sync == true)
     {
         now_time = smtc_modem_hal_get_time_in_ms( );
-        if(sleepTime > 500)
+        if(sleepTime > 3000)        //Sensor acquisition time requires 2s+
         {
             if(position_period<120000) position_period = 120000;
             if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
@@ -345,7 +345,6 @@ void loop()
                 }
                 printf("stop scan gnss\r\n");
                 app_gps_scan_stop( );
-                sensor_datas_get();
                 //send data to LoRaWAN
                 // raw datas
                 for( uint8_t i = 0; i < gnss_mw_custom_send_buffer_num; i++ )
@@ -360,7 +359,14 @@ void loop()
 
             }
         }
-        sleepTime = smtc_modem_hal_get_time_in_ms( )-now_time;
+        if(sleepTime > (smtc_modem_hal_get_time_in_ms( )-now_time))
+        {
+            sleepTime = sleepTime - (smtc_modem_hal_get_time_in_ms( )-now_time);
+        }
+        else
+        {
+            sleepTime = 1;
+        }
     }
     delay(min(sleepTime, EXECUTION_PERIOD));
 }

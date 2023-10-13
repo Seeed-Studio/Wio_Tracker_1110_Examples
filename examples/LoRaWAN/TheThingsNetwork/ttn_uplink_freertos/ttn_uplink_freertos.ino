@@ -1,16 +1,16 @@
-/*
- * ttn_uplink.ino
- * Copyright (C) 2023 Seeed K.K.
- * MIT License
- */
-
-////////////////////////////////////////////////////////////////////////////////
-// Includes
-
 #include <Arduino.h>
 
 #include <LbmWm1110.hpp>
 #include <Lbmx.hpp>
+
+#include <Lbm_packet.hpp>
+
+//taskhandle
+static TaskHandle_t  LORAWAN_ENGINE_Handle;
+static TaskHandle_t  LORAWAN_TX_Handle;
+
+void app_lora_engine_task_wakeup( void );
+void app_lora_tx_task_wakeup( void );
 
 /* most important thing:
 // Please follow local regulations to set lorawan duty cycle limitations
@@ -33,16 +33,12 @@ enum class StateType
 ////////////////////////////////////////////////////////////////////////////////
 // Constants
 
-static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_AS_923_GRP1;
+static constexpr smtc_modem_region_t REGION = SMTC_MODEM_REGION_EU_868;
 static const uint8_t DEV_EUI[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static const uint8_t JOIN_EUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static const uint8_t APP_KEY[16] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-static constexpr uint32_t FIRST_UPLINK_DELAY = 60;  // [sec.]
-static constexpr uint32_t UPLINK_PERIOD = 30;       // [sec.]
-static constexpr uint8_t UPLINK_FPORT = 3;
-
-static constexpr uint32_t EXECUTION_PERIOD = 50;    // [msec.]
+static constexpr uint8_t UPLINK_FPORT = 5;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
@@ -59,7 +55,6 @@ protected:
     void reset(const LbmxEvent& event) override;
     void joined(const LbmxEvent& event) override;
     void joinFail(const LbmxEvent& event) override;
-    void alarm(const LbmxEvent& event) override;
 
 };
 
@@ -82,23 +77,18 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
     state = StateType::Joined;
+
+    //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
+    app_get_profile_list_by_region(REGION, adr_custom_list_region);
+    if (smtc_modem_adr_set_profile(0, SMTC_MODEM_ADR_PROFILE_CUSTOM, adr_custom_list_region) != SMTC_MODEM_RC_OK) abort();              //adr_custom_list_region  CUSTOM_ADR    
+
     printf("Start the alarm event.\n");
-    if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
+    app_lora_tx_task_wakeup( );
 }
 
 void MyLbmxEventHandlers::joinFail(const LbmxEvent& event)
 {
     state = StateType::Failed;
-}
-
-void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
-{
-    printf("Send the uplink message.\n");
-    static uint32_t counter = 0;
-    if (LbmxEngine::requestUplink(UPLINK_FPORT, false, &counter, sizeof(counter)) != SMTC_MODEM_RC_OK) abort();
-    ++counter;
-
-    if (LbmxEngine::startAlarm(UPLINK_PERIOD) != SMTC_MODEM_RC_OK) abort();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -117,41 +107,65 @@ static void ModemEventHandler()
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// setup and loop
-
-void setup()
+//---------------Task---------------- ---------------
+void app_lora_tx_task_wakeup( void )
 {
+    xTaskNotifyGive( LORAWAN_TX_Handle );
+}
+void app_Lora_engine_task_wakeup( void )
+{
+    xTaskNotifyGive( LORAWAN_ENGINE_Handle );
+}
+
+// LoraWan_Engine_Task
+void LoraWan_Engine_Task(void *parameter) {
+    while (true) 
+    {
+        uint32_t sleepTime = LbmxEngine::doWork();
+        ( void )ulTaskNotifyTake( pdTRUE, sleepTime );
+    }
+}
+// LoraWan_Tx_Task
+void LoraWan_Tx_Task(void *parameter) {
+    static uint32_t counter = 0;
+    while (true) 
+    {
+        ( void )ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        while(1)
+        {
+            smtc_modem_status_mask_t modem_status;
+            smtc_modem_get_status( 0, &modem_status );
+            if(( modem_status & SMTC_MODEM_STATUS_JOINED ) == SMTC_MODEM_STATUS_JOINED)
+            {
+                printf("Send the uplink message.\n");
+                LbmxEngine::requestUplink(UPLINK_FPORT, false, &counter, sizeof(counter));
+                counter ++;
+                app_Lora_engine_task_wakeup(  );
+            }
+            vTaskDelay(30000);
+        }
+    }
+}
+ 
+void setup() {
+
     delay(1000);
     printf("\n---------- STARTUP ----------\n");
+
+    default_param_load();
 
     lbmWm1110.begin();
     LbmxEngine::begin(lbmWm1110.getRadio(), ModemEventHandler);
 
     LbmxEngine::printVersions(lbmWm1110.getRadio());
+	// create task
+	xTaskCreate(LoraWan_Engine_Task, "LoraWan_Engine_Task", 256*4, NULL, 1, &LORAWAN_ENGINE_Handle);
+
+    xTaskCreate(LoraWan_Tx_Task, "LoraWan_Tx_Task", 256*2, NULL, 2, &LORAWAN_TX_Handle);
+
+	vTaskStartScheduler();
 }
-
-void loop()
-{
-    switch (state)
-    {
-    case StateType::Startup:
-        ledOff(LED_BUILTIN);
-        break;
-    case StateType::Joining:
-        if (millis() % 1000 < 200) ledOn(LED_BUILTIN); else ledOff(LED_BUILTIN);
-        break;
-    case StateType::Joined:
-        ledOn(LED_BUILTIN);
-        break;
-    case StateType::Failed:
-        if (millis() % 400 < 200) ledOn(LED_BUILTIN); else ledOff(LED_BUILTIN);
-        break;
-    }
-
-    const uint32_t sleepTime = LbmxEngine::doWork();
-
-    delay(min(sleepTime, EXECUTION_PERIOD));
+ 
+void loop() {
+	
 }
-
-////////////////////////////////////////////////////////////////////////////////
