@@ -128,6 +128,7 @@ void modem_run_led_action(void)
                 digitalToggle(LED_BUILTIN);
                 if((led_flicker_start_time+led_flicker_timeout)<smtc_modem_hal_get_time_in_ms( ))
                 {
+                    ledOff(LED_BUILTIN);
                     led_flicker_start_time = 0;
                 }
             }
