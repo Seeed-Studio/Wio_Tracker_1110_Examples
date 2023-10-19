@@ -437,7 +437,7 @@ void setup()
     app_ble_adv_init();
 
     printf("\n---------- STARTUP ----------\n");
-
+    printf("wio tracker sw: %d.%d\n",TRACKER_SW_MAJOR_VER,TRACKER_SW_MINOR_VER);
 
     // custom_lora_adr_compute(0,6,adr_custom_list_region);
 
