@@ -476,7 +476,12 @@ void loop()
     uint32_t sleepTime = LbmxEngine::doWork();
 
     modem_run_led_action();   
-
+    if(button_press_flag||lis3dhtr_irq_flag)
+    {
+        printf("Vibration triggered status:%d, Key triggered status:%d\r\n",lis3dhtr_irq_flag,button_press_flag);
+        button_press_flag = 0;
+        lis3dhtr_irq_flag = 0;
+    }
     if(is_first_time_sync == true)
     {
         if(sleepTime > 300)
