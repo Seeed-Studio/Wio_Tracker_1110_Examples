@@ -1,5 +1,5 @@
 /*
- * ttn_geolocation_gnss.ino
+ * TTN_GNSS_Uplink.ino
  * Copyright (C) 2023 Seeed K.K.
  * MIT License
  */
@@ -310,7 +310,8 @@ void setup()
     gnss_mw_init( lbmWm1110.getRadio(), stack_id );
     gnss_mw_custom_enable_copy_send_buffer();
     gnss_mw_set_constellations( GNSS_MW_CONSTELLATION_GPS_BEIDOU );
-
+    // /* Set user defined assistance position */
+    gnss_mw_set_user_aiding_position( app_task_gnss_aiding_position_latitude, app_task_gnss_aiding_position_longitude );
     LbmxEngine::begin(lbmWm1110.getRadio(), ModemEventHandler);
 
     LbmxEngine::printVersions(lbmWm1110.getRadio());
@@ -349,10 +350,7 @@ void loop()
                 // raw datas
                 for( uint8_t i = 0; i < gnss_mw_custom_send_buffer_num; i++ )
                 {
-                    for( uint8_t j = 0; j < gnss_mw_custom_send_buffer_len[i]; j++ )
-                    {
-                        app_task_lora_tx_queue( gnss_mw_custom_send_buffer[i], gnss_mw_custom_send_buffer_len[i], false, false );
-                    }
+                    app_task_lora_tx_queue( gnss_mw_custom_send_buffer[i], gnss_mw_custom_send_buffer_len[i], false, false );
                 }
                 //TODO  user can compose any package they want
                 app_lora_set_port(lorawan_port);  //set upload data port

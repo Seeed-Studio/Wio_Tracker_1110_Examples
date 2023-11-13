@@ -1,5 +1,5 @@
 /*
- * ttn_uplink.ino
+ * TTN_Uplink.ino
  * Copyright (C) 2023 Seeed K.K.
  * MIT License
  */

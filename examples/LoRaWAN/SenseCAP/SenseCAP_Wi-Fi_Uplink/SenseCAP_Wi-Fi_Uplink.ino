@@ -1,5 +1,5 @@
 /*
- * sensecap_wifi_uplink.ino
+ * SenseCAP_Wi-Fi_Uplink.ino
  * Copyright (C) 2023 Seeed K.K.
  * MIT License
  */
@@ -55,6 +55,7 @@ static constexpr uint32_t UPLINK_PERIOD = 10;       // [sec.]
 
 
 static constexpr uint32_t EXECUTION_PERIOD = 60;    // [msec.]
+static constexpr char region_str[][20]={"EU_868","AS_923_GRP1","US_915", "AU_915","CN_470","WW2G4","AS_923_GRP2","AS_923_GRP3","IN_865","KR_920","RU_864","CN_470_RP_1_0", "AS_923_GRP4","AS_923_HELIUM_1","AS_923_HELIUM_2","AS_923_HELIUM_3","AS_923_HELIUM_4","AS_923_HELIUM_1B"};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Variables
@@ -84,28 +85,28 @@ static StateType state = StateType::Startup;
 ////////////////////////////////////////////////////////////////////////////////
 void print_current_lorawan_param(void)
 {
-    printf("DevEui:\r\n");
-    for(uint8_t u8i = 0;u8i < 8; u8i++)
-    {
-        printf("%02x ",DEV_EUI[u8i]);
-    }
-    printf("\r\nJoinEui:\r\n");
-    for(uint8_t u8i = 0;u8i < 8; u8i++)
-    {
-        printf("%02x ",JOIN_EUI[u8i]);
-    }
-    printf("\r\nAppKey:\r\n");
-    for(uint8_t u8i = 0;u8i < 16; u8i++)
-    {
-        printf("%02x ",APP_KEY[u8i]);
-    }
-    printf("\r\n");    
+    // printf("DevEui:\r\n");
+    // for(uint8_t u8i = 0;u8i < 8; u8i++)
+    // {
+    //     printf("%02x ",DEV_EUI[u8i]);
+    // }
+    // printf("\r\nJoinEui:\r\n");
+    // for(uint8_t u8i = 0;u8i < 8; u8i++)
+    // {
+    //     printf("%02x ",JOIN_EUI[u8i]);
+    // }
+    // printf("\r\nAppKey:\r\n");
+    // for(uint8_t u8i = 0;u8i < 16; u8i++)
+    // {
+    //     printf("%02x ",APP_KEY[u8i]);
+    // }
+    // printf("\r\n");    
 
     position_period = app_append_param.position_interval*60*1000;
     sensor_read_period = app_append_param.sample_interval*60*1000;
 
-    printf("position_period:%umin\r\n",app_append_param.position_interval);
-    printf("sensor_read_period:%umin\r\n",app_append_param.sample_interval);
+    // printf("position_period:%umin\r\n",app_append_param.position_interval);
+    // printf("sensor_read_period:%umin\r\n",app_append_param.sample_interval);
 
 }
 void init_current_lorawan_param(void)
@@ -141,6 +142,7 @@ protected:
 
 void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 {
+    printf("----- Reset LR1110 to start Join the network -----\n");
     if (LbmxEngine::setRegion(REGION) != SMTC_MODEM_RC_OK) abort();
     if (LbmxEngine::setOTAA(DEV_EUI, JOIN_EUI, APP_KEY) != SMTC_MODEM_RC_OK) abort();
 
@@ -150,7 +152,7 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
         if (smtc_modem_dm_set_info_fields(&infoField, 1) != SMTC_MODEM_RC_OK) abort();
     }
 
-    printf("Join the LoRaWAN network.\n");
+    printf("Request for Join the LoRaWAN network\n");
     if (LbmxEngine::joinNetwork() != SMTC_MODEM_RC_OK) abort();
 
     // if((REGION == SMTC_MODEM_REGION_EU_868) || (REGION == SMTC_MODEM_REGION_RU_864)) //disable duty cycle limit
@@ -163,6 +165,7 @@ void MyLbmxEventHandlers::reset(const LbmxEvent& event)
 
 void MyLbmxEventHandlers::joined(const LbmxEvent& event)
 {
+    printf("----- JOINED -----\n");
     state = StateType::Joined;
     //Configure ADR, It is necessary to set up ADR,Tx useable payload must large than 51 bytes
     app_get_profile_list_by_region(REGION,adr_custom_list_region);
@@ -172,20 +175,23 @@ void MyLbmxEventHandlers::joined(const LbmxEvent& event)
     if (smtc_modem_time_set_sync_invalid_delay_s(TIME_SYNC_VALID_TIME) != SMTC_MODEM_RC_OK) abort();    // keep call order
 
 
-    printf("Start time sync.\n");
+    printf("Send uplink packet to request current time from Cloud.\n");
     if (smtc_modem_time_start_sync_service(0, SMTC_MODEM_TIME_ALC_SYNC) != SMTC_MODEM_RC_OK) abort();
     
-    printf("Start the alarm event.\n");
+    printf("Start the timer every %ds to check if there are data need to be sent.\n",UPLINK_PERIOD);
     if (LbmxEngine::startAlarm(FIRST_UPLINK_DELAY) != SMTC_MODEM_RC_OK) abort();
 
+    app_task_booting_data_send(position_period/60/1000,sensor_read_period/60/1000);
 }
 
 void MyLbmxEventHandlers::joinFail(const LbmxEvent& event)
 {
+    printf("----- Join fail -----\n");
     state = StateType::Failed;
 }
 void MyLbmxEventHandlers::time(const LbmxEvent& event)
 {
+    printf("----- Receieved downlink Time from Cloud -----\n");
     if (event.event_data.time.status == SMTC_MODEM_EVENT_TIME_NOT_VALID) return;
 
     static bool first = true;
@@ -196,7 +202,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
         {
             is_first_time_sync = true;
         }
-        printf("time sync ok:current time:%lu\r\n",app_task_track_get_utc( ));
+        printf("Sync time succeed:current time in UNIX format:%lu\r\n",app_task_track_get_utc( ));
         // Configure transmissions
         if (smtc_modem_set_nb_trans(0, 1) != SMTC_MODEM_RC_OK) abort();
         if (smtc_modem_connection_timeout_set_thresholds(0, 0, 0) != SMTC_MODEM_RC_OK) abort();
@@ -206,6 +212,7 @@ void MyLbmxEventHandlers::time(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 {
+    printf("----- Timer for %ds -----\n",UPLINK_PERIOD);
     if(app_task_lora_tx_engine())
     {
         ledOn(LED_BUILTIN);
@@ -214,26 +221,30 @@ void MyLbmxEventHandlers::alarm(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::almanacUpdate(const LbmxEvent& event)
 {
+    printf( "----- Checking if the Almanac need to update -----\n" );
     if( event.event_data.almanac_update.status == SMTC_MODEM_EVENT_ALMANAC_UPDATE_STATUS_REQUESTED )
     {
-        printf( "Almanac update is not completed: sending new request\n" );
+        printf( "The stored Almanac is not completed: sending request to LoRa Cloud for Almanac update\n" );
     }
     else
     {
-        printf( "Almanac update is completed\n" );
+        printf( "The stored Almanac is completed\n" );
     }
 }
 void MyLbmxEventHandlers::txDone(const LbmxEvent& event)
 {
     static uint32_t uplink_count = 0;
+
+    printf( "----- Send LoRa Uplink Packet Done -----\n" );
+
     ledOff(LED_BUILTIN);
     if( event.event_data.txdone.status == SMTC_MODEM_EVENT_TXDONE_CONFIRMED )
     {
         app_lora_confirmed_count_increment();
     }
-    uint32_t tick = smtc_modem_hal_get_time_in_ms( );
+    uint32_t tick = smtc_modem_hal_get_time_in_s( );
     uint32_t confirmed_count = app_lora_get_confirmed_count();
-    printf( "LoRa tx done at %lu, %lu, %lu\r\n", tick, ++uplink_count, confirmed_count );    
+    printf( "Send LoRa Transmit Packet Done at RTC time %lu s,Uplink Packet: %lu,Confirm Ack Packet: %lu\r\n", tick, ++uplink_count, confirmed_count );    
 }
 
 void MyLbmxEventHandlers::downData(const LbmxEvent& event)
@@ -263,7 +274,7 @@ void MyLbmxEventHandlers::downData(const LbmxEvent& event)
 }
 void MyLbmxEventHandlers::wifiScanDone(const LbmxEvent& event)
 {
-    printf("----- Wi-Fi - %s -----\n", event.getWifiEventString(WIFI_MW_EVENT_SCAN_DONE).c_str());
+    printf("----- The Semtech LBM finished scanning the Wi-Fi -----\n");
 
     wifi_mw_get_event_data_scan_done(&wifi_results);
     wifi_mw_display_results(&wifi_results);
@@ -275,8 +286,8 @@ void MyLbmxEventHandlers::wifiTerminated(const LbmxEvent& event)
 
     wifi_mw_event_data_terminated_t eventData;
     wifi_mw_get_event_data_terminated(&eventData);
-    printf("TERMINATED info:\n");
-    printf("-- number of scans sent: %u\n", eventData.nb_scans_sent);
+    // printf("TERMINATED info:\n");
+    // printf("-- number of scans sent: %u\n", eventData.nb_scans_sent);
 }
 
 void MyLbmxEventHandlers::wifiScanCancelled(const LbmxEvent& event)
@@ -303,7 +314,7 @@ static void ModemEventHandler()
 
     while (event.fetch())
     {
-        printf("----- %s -----\n", event.getEventString().c_str());
+        // printf("----- %s -----\n", event.getEventString().c_str());
 
         handlers.invoke(event);
     }
@@ -319,7 +330,20 @@ void setup()
     delay(1000);
     sensor_init_detect();
 
-    printf("\n---------- STARTUP ----------\n");
+    printf("\n---------- Booting ----------\n");
+    printf("Wio Tracker 1110 Dev Board\n");
+    printf("Firmware Version: v%d.%d\n",TRACKER_SW_MAJOR_VER,TRACKER_SW_MINOR_VER);
+    printf("DevEUI:");
+    for(uint8_t u8i = 0;u8i < 8; u8i++)
+    {
+        printf("%02x",DEV_EUI[u8i]);
+    }
+    printf("\r\n");
+
+    printf("Region:%s\r\n",region_str[REGION-1]);
+
+    printf("Scan geolocation Interval(min):%u\r\n",position_period/60/1000);
+    printf("Read sensor data Interval(min):%u\r\n",sensor_read_period/60/1000);
     // custom_lora_adr_compute(0,6,adr_custom_list_region);
 
     lbmWm1110.begin();
@@ -374,7 +398,7 @@ void loop()
             now_time = smtc_modem_hal_get_time_in_ms( );
             if(now_time - start_scan_time > position_period ||(start_scan_time == 0))
             {
-                printf("start scan wifi\r\n");
+                printf("Start scanning the Wi-Fi\r\n");
                 app_wifi_scan_start();
                 wifi_scan_end = false;
                 start_scan_time = smtc_modem_hal_get_time_in_ms( );
@@ -387,7 +411,7 @@ void loop()
                 {
                     app_wifi_display_results( );
                 }
-                printf("stop scan wifi\r\n");
+                printf("Stop LR1110 to scan the Wi-Fi\r\n");
                 app_wifi_scan_stop( );
                 //Insert  position data to lora tx buffer
                 app_task_track_scan_send();
