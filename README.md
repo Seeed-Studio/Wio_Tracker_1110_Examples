@@ -18,21 +18,16 @@ Contains examples for the Arduino IDE platform.
 |[Grove/Sensor/Ambient-Light-Si1151](/examples/Grove/Sensor/Ambient-Light-Si1151)|An arduino project that uses SI1151 sensors to measures Ultraviolet index value and output the values to the serial monitor|I2C|||SI1151|
 |[Grove/Sensor/Sound](/examples/Grove/Sensor/Sound)|An arduino project that uses SOUND sensors to measures sound voltage value and output the values to the serial monitor|Analog|||SOUND|
 |[Grove/Sensor/Ultrasonic](/examples/Grove/Sensor/Ultrasonic)|An arduino project that uses ULTRASONIC DISTANCE sensors to measures distance(unit:cm) and output the values to the serial monitor|Digital0|||ULTRASONIC DISTANCE|
-|[LoRaWAN/SenseCAP/SenseCAP_BLE_FreeRTOS](/examples/LoRaWAN/SenseCAP/SenseCAP_BLE_FreeRTOS)|An Arduino project that collects various sensor data and scan for ble then uses freertos to run LoRaWAN upload datas to SenseCAP Cloud|I2C Analog Digital0|LoRaWAN|FreeRTOS|SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/SenseCAP_BLE_Uplink](/examples/LoRaWAN/SenseCAP/SenseCAP_BLE_Uplink)|An Arduino project that collects various sensor data and scan for ibeacon then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
-|[LoRaWAN/SenseCAP/SenseCAP_GNSS_FreeRTOS](/examples/LoRaWAN/SenseCAP/SenseCAP_GNSS_FreeRTOS)|An Arduino project that collects various sensor data and scan for gnss then uses freertos to run LoRaWAN upload datas to SenseCAP Cloud|I2C Analog Digital0|LoRaWAN|FreeRTOS|SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/SenseCAP_GNSS_Uplink](/examples/LoRaWAN/SenseCAP/SenseCAP_GNSS_Uplink)|An Arduino project that collects various sensor data and scan for gnss then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
-|[LoRaWAN/SenseCAP/SenseCAP_Wi-Fi_FreeRTOS](/examples/LoRaWAN/SenseCAP/SenseCAP_Wi-Fi_FreeRTOS)|An Arduino project that collects various sensor data and scan for wifi then uses freertos to run LoRaWAN upload datas to SenseCAP Cloud|I2C Analog Digital0|LoRaWAN|FreeRTOS|SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/SenseCAP_Wi-Fi_Uplink](/examples/LoRaWAN/SenseCAP/SenseCAP_Wi-Fi_Uplink)|An Arduino project that collects various sensor data and scan for wifi then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
 |[LoRaWAN/SenseCAP/Default_Firmware](/examples/LoRaWAN/SenseCAP/Default_Firmware)|An Arduino project that collects various sensor data and scan for gnss then using LoRaWAN upload to SenseCAP Cloud||LoRaWAN||SenseCAP Cloud|
 |[LoRaWAN/TheThingsNetwork/TTN_GNSS_Uplink](/examples/LoRaWAN/TheThingsNetwork/TTN_GNSS_Uplink)|An Arduino project that scan for gnss then using LoRaWAN upload to TTN Cloud||LoRaWAN||The Things Network|
 |[LoRaWAN/TheThingsNetwork/TTN_Uplink](/examples/LoRaWAN/TheThingsNetwork/TTN_Uplink)|An Arduino project that using LoRaWAN upload count to TTN Cloud||LoRaWAN||The Things Network|
-|[LoRaWAN/TheThingsNetwork/TTN_FreeRTOS](/examples/LoRaWAN/TheThingsNetwork/TTN_FreeRTOS)|An Arduino project that uses freertos to run LoRaWAN to upload data||LoRaWAN|FreeRTOS|The Things Network|
 |[Misc/BLE_Scan_Advanced](/examples/MISC/BLE_Scan_Advanced)|An Arduino project that sets up a Bluetooth Low Energy (BLE) central device to scan for iBeacon advertisements and output the results to the serial monitor||||iBeacon|
 |[Misc/FreeRTOS_Template](/examples/MISC/FreeRTOS_Template)|An Arduino project that uses freertos to create tasks|||FreeRTOS||
 |[Misc/I2c_Scan](/examples/MISC/I2c_Scan)|An Arduino project scan I2C and output the I2C address that responded to the Serial monitor|I2C||||
 |[Misc/Flash_Speed_Test](/examples/MISC/Flash_Speed_Test)|An Arduino project that tests the speed and functionality of a specific SPI Flash memory chip (P25Q32H) using an Adafruit library and output to the Serial monitor||||P25Q32H|
-|[Misc/Full_Almanac_Update](/examples/MISC/Full_Almanac_Update)|An Arduino project that update almanac to LR1110 and output almanac date to the Serial monitor|||||
 
 `/platformio`
 

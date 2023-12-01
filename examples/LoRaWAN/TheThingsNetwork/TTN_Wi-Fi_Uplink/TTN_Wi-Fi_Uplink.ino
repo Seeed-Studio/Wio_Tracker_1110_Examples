@@ -32,7 +32,7 @@ uint8_t devEui[SMTC_MODEM_EUI_LENGTH] = {0x00, 0x16, 0xC0, 0x01, 0xFF, 0xFE, 0x1
 uint8_t joinEui[SMTC_MODEM_EUI_LENGTH] = {0x00, 0x16, 0xC0, 0x01, 0xFF, 0xFE, 0x00, 0x01};
 uint8_t nwkKey[SMTC_MODEM_KEY_LENGTH] = {0x00, 0x16, 0xC0, 0x01, 0xFF, 0xFE, 0x10, 0x31, 0x00, 0x16, 0xC0, 0x01, 0xFF, 0xFE, 0x00, 0x01};
 
-// network code for node-red
+// network code for node-red 
 // see https://lora-developers.semtech.com/build/software/lora-basics/lora-basics-for-end-nodes/developer-walk-through/?url=application_server.html
 
 // uint8_t devEui[SMTC_MODEM_EUI_LENGTH] = {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x06, 0x23, 0x14};
@@ -52,10 +52,9 @@ static WM1110_Geolocation& wm1110_geolocation = WM1110_Geolocation::getInstance(
 void setup()
 {
     // 
-
     delay(1000);
-
-    wm1110_geolocation.begin(Track_Scan_Gps,false);
+    
+    wm1110_geolocation.begin(Track_Scan_Wifi,false);
 
     wm1110_geolocation.setCustomJoinNetworkCode(devEui,joinEui,nwkKey);
     wm1110_geolocation.setCustomRegion(modem_region);
