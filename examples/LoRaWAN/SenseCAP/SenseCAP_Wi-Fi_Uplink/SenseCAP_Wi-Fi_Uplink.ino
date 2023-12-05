@@ -33,7 +33,6 @@ uint32_t track_period_time = 0;
 //Sensor measurement
 uint32_t sensor_read_period = 0; 
 static uint32_t start_sensor_read_time = 0; 
-static uint32_t start_scan_time = 0;  
 static uint32_t start_voc_read_time = 0; 
 static uint32_t start_sound_read_time = 0; 
 static uint32_t start_ultrasonic_read_time = 0; 

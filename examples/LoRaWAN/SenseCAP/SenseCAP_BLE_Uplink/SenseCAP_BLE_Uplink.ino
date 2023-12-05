@@ -33,7 +33,6 @@ uint32_t track_period_time = 0;
 //Sensor measurement
 uint32_t sensor_read_period = 0; 
 static uint32_t start_sensor_read_time = 0; 
-static uint32_t start_scan_time = 0;  
 static uint32_t start_voc_read_time = 0; 
 static uint32_t start_sound_read_time = 0; 
 static uint32_t start_ultrasonic_read_time = 0; 
@@ -113,8 +112,7 @@ void setup()
 
 void loop()
 {
-    uint32_t now_time = 0;
-    bool result = false;  
+    uint32_t now_time = 0; 
 
     uint32_t sleepTime = wm1110_geolocation.trackProcess();
 
@@ -133,7 +131,7 @@ void loop()
 
             if(tracker_peripheral.measureSGP41Datas(temperature,humidity,&tVOC_index))
             {
-                printf("tVOC index:%d\r\n",tVOC_index); 
+                printf("tVOC index:%ld\r\n",tVOC_index); 
             }
 
             start_voc_read_time = smtc_modem_hal_get_time_in_ms( );
