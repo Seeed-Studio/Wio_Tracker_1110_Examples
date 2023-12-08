@@ -43,110 +43,112 @@ constexpr float SAMPLING_INTERVAL = 1.f;
 
 SensirionI2CSht4x sht4x;
 SensirionI2CSgp41 sgp41;
-VOCGasIndexAlgorithm voc_algorithm(SAMPLING_INTERVAL);
+VOCGasIndexAlgorithm voc_algorithm(SAMPLING_INTERVAL); // tVOC algorithm
 char errorMessage[32];
 
 void setup()
 {
-  delay(100);
-  Serial.begin(115200);
-  while (!Serial) delay(100);
+    delay(100); // Wait for power on grove
 
-  Wire.begin();
+    // Initializes the debug output 
+    Serial.begin(115200);
+    while (!Serial) delay(100);     // Wait for ready
 
-  sht4x.begin(Wire);  //use for temperature and humidity compensation
-  sgp41.begin(Wire);
+    Wire.begin();
 
-  delay(1000); 
+    sht4x.begin(Wire);  //Use for temperature and humidity compensation
+    sgp41.begin(Wire);
 
-  Serial.print("Sampling interval (sec):\t");
-  Serial.println(voc_algorithm.get_sampling_interval());
-  Serial.println("");
+    delay(1000); 
+
+    Serial.print("Sampling interval (sec):\t");
+    Serial.println(voc_algorithm.get_sampling_interval());
+    Serial.println("");
 }
 
 void loop()
 {
-  uint16_t error;
-  uint16_t compensationRh = 0x8000;  // initialized to default value in ticks as defined by sgp41
-  uint16_t compensationT = 0x6666;  // initialized to default value in ticks as defined by sgp41
+    uint16_t error;
+    uint16_t compensationRh = 0x8000;  // initialized to default value in ticks as defined by sgp41
+    uint16_t compensationT = 0x6666;  // initialized to default value in ticks as defined by sgp41
 
-  // 1. Sleep: We need the delay to match the desired sampling interval
-  // In low power mode, the sgp41 takes 200ms to acquire values.
-  // SHT4X also includes a delay of 10ms
-  delay(int(SAMPLING_INTERVAL) * 1000 - 210);
+    // 1. Sleep: We need the delay to match the desired sampling interval
+    // In low power mode, the sgp41 takes 200ms to acquire values.
+    // SHT4X also includes a delay of 10ms
+    delay(int(SAMPLING_INTERVAL) * 1000 - 210);
 
-  // 2. Measure temperature and humidity for SGP internal compensation
-  getCompensationValuesFromSHT4x(&compensationRh, &compensationT, &error);
-  if (error)
-  {
-    Serial.print("SHT4x - Error trying to execute measureHighPrecision(): ");
-    errorToString(error, errorMessage, sizeof(errorMessage));
-    Serial.println(errorMessage);
-    Serial.println("Fallback to use default values for humidity and temperature compensation for sgp41");
-  }
+    // 2. Measure temperature and humidity for SGP internal compensation
+    getCompensationValuesFromSHT4x(&compensationRh, &compensationT, &error);
+    if (error)
+    {
+        Serial.print("SHT4x - Error trying to execute measureHighPrecision(): ");
+        errorToString(error, errorMessage, sizeof(errorMessage));
+        Serial.println(errorMessage);
+        Serial.println("Fallback to use default values for humidity and temperature compensation for sgp41");
+    }
 
-  // 3. Measure sgp41 signals using low power mode
-  sgp41MeasureRawSignalLowPower(compensationRh, compensationT, &error);
-  if (error)
-  {
-    Serial.print("sgp41 - Error trying to acquire data in low power mode: ");
-    errorToString(error, errorMessage, sizeof(errorMessage));
-    Serial.println(errorMessage);
-  }
+    // 3. Measure sgp41 signals using low power mode
+    sgp41MeasureRawSignalLowPower(compensationRh, compensationT, &error);
+    if (error)
+    {
+        Serial.print("sgp41 - Error trying to acquire data in low power mode: ");
+        errorToString(error, errorMessage, sizeof(errorMessage));
+        Serial.println(errorMessage);
+    }
 }
 
 void sgp41MeasureRawSignalLowPower(uint16_t compensationRh, uint16_t compensationT, uint16_t* error)
 {
-  uint16_t srawVoc = 0;
-  int32_t voc_index = 0;
-  uint16_t srawNox = 0;
-  // Request a first measurement to heat up the plate (ignoring the result)
-  *error = sgp41.measureRawSignals(compensationRh, compensationT, srawVoc,srawNox);
-  if (*error) return;
+    uint16_t srawVoc = 0;
+    int32_t voc_index = 0;
+    uint16_t srawNox = 0;
+    // Request a first measurement to heat up the plate (ignoring the result)
+    *error = sgp41.measureRawSignals(compensationRh, compensationT, srawVoc,srawNox);
+    if (*error) return;
 
-  // Delaying 170 msec to let the plate heat up.
-  // Keeping in mind that the measure command already include a 30ms delay
-  delay(140);
+    // Delaying 170 msec to let the plate heat up.
+    // Keeping in mind that the measure command already include a 30ms delay
+    delay(140);
 
-  // Request the measurement values
-  *error = sgp41.measureRawSignals(compensationRh, compensationT, srawVoc,srawNox);
-  if (*error) return;
+    // Request the measurement values
+    *error = sgp41.measureRawSignals(compensationRh, compensationT, srawVoc,srawNox);
+    if (*error) return;
 
-  Serial.print("SRAW_VOC:");
-  Serial.print(srawVoc);
-  Serial.print("\t");
-  Serial.print("SRAW_NOx:");
-  Serial.println(srawNox);
+    Serial.print("SRAW_VOC:");
+    Serial.print(srawVoc);
+    Serial.print("\t");
+    Serial.print("SRAW_NOx:");
+    Serial.println(srawNox);
 
-  // Turn heater off
-  *error = sgp41.turnHeaterOff();
-  if (*error) return;
+    // Turn heater off
+    *error = sgp41.turnHeaterOff();
+    if (*error) return;
 
-  // Process raw signals by Gas Index Algorithm to get the VOC index values
-  voc_index = voc_algorithm.process(srawVoc);
-  Serial.print("\t");
-  Serial.print("VOC Index: ");
-  Serial.println(voc_index);
+    // Process raw signals by Gas Index Algorithm to get the VOC index values
+    voc_index = voc_algorithm.process(srawVoc);
+    Serial.print("\t");
+    Serial.print("VOC Index: ");
+    Serial.println(voc_index);
 }
 
 void getCompensationValuesFromSHT4x(uint16_t* compensationRh, uint16_t* compensationT, uint16_t* error)
 {
-  float humidity = 0;     // %RH
-  float temperature = 0;  // degreeC
-  *error = sht4x.measureHighPrecision(temperature, humidity);
-  if (*error) return;
+    float humidity = 0;     // %RH
+    float temperature = 0;  // degreeC
+    *error = sht4x.measureHighPrecision(temperature, humidity);
+    if (*error) return;
 
-  Serial.print("T:");
-  Serial.print(temperature);
-  Serial.print("\t");
-  Serial.print("RH:");
-  Serial.println(humidity);
+    Serial.print("T:");
+    Serial.print(temperature);
+    Serial.print("\t");
+    Serial.print("RH:");
+    Serial.println(humidity);
 
-  // convert temperature and humidity to ticks as defined by sgp41
-  // interface
-  // NOTE: in case you read RH and T raw signals check out the
-  // ticks specification in the datasheet, as they can be different for
-  // different sensors
-  *compensationT = static_cast<uint16_t>((temperature + 45) * 65535 / 175);
-  *compensationRh = static_cast<uint16_t>(humidity * 65535 / 100);
+    // convert temperature and humidity to ticks as defined by sgp41
+    // interface
+    // NOTE: in case you read RH and T raw signals check out the
+    // ticks specification in the datasheet, as they can be different for
+    // different sensors
+    *compensationT = static_cast<uint16_t>((temperature + 45) * 65535 / 175);
+    *compensationRh = static_cast<uint16_t>(humidity * 65535 / 100);
 }

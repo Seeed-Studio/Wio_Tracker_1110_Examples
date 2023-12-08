@@ -5,27 +5,30 @@ constexpr float MV_PER_LSB = 3600.0f / 1024.0f; // 10-bit ADC with 3.6V input ra
 
 void setup()
 {
-  delay(100);
-  Serial.begin(115200);
-  while (!Serial) delay(100);
+    delay(100); // Wait for power on grove  
 
-  Serial.println("Grove - Sound Sensor Test...");
+    // Initializes the debug output   
+    Serial.begin(115200);
+    while (!Serial) delay(100);     // Wait for ready
+
+    Serial.println("Grove - Sound Sensor Test...");
 }
 
 void loop()
 {
-  long sum = 0;
-  for (int i = 0; i < 32; i++)
-  {
-    sum += analogRead(ADCIN);
+    // Get a fresh ADC value
+    long sum = 0;
+    for (int i = 0; i < 32; i++) // Sample multiple times to average
+    {
+        sum += analogRead(ADCIN);
+        delay(2);
+    }
+    int adcvalue = sum / 32;
+
+    Serial.print(adcvalue);
+    Serial.print(" [");
+    Serial.print((float)adcvalue * MV_PER_LSB);
+    Serial.println(" mV]");
+
     delay(2);
-  }
-  int adcvalue = sum / 32;
-
-  Serial.print(adcvalue);
-  Serial.print(" [");
-  Serial.print((float)adcvalue * MV_PER_LSB);
-  Serial.println(" mV]");
-
-  delay(2);
 }
